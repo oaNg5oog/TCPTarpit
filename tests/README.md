@@ -1,0 +1,46 @@
+# tcptarpit tests
+
+## tarpit-loadtest.pl
+
+Resource and effectiveness test, run directly on the daemon host
+(root, so daemon statistics are readable):
+
+```sh
+perl tests/tarpit-loadtest.pl                # against 127.0.0.1:8024
+perl tests/tarpit-loadtest.pl --host H --port P
+```
+
+Core perl only (IO::Socket::INET, IO::Select), no dependencies. Exit
+code 0 = all phases passed, 1 otherwise, so it can run as a smoke test
+after deployment.
+
+| Phase | What it does | What it proves |
+|---|---|---|
+| probe | connect, send, wait 2 s, write again | tarpit stays silent and holds the connection |
+| idle_flood | 300 concurrent silent connections, 5 s | memory per held connection < 32 KiB, CPU bounded |
+| data_flood | 50 connections push 100 MiB total | 64 KiB drain keeps daemon CPU near zero |
+| churn | 1000 connect+FIN and 500 connect+RST cycles | disconnect storms cost bounded CPU, daemon survives |
+| slowloris | 100 connections, 1 byte/s for 8 s | slow senders are held at ~zero cost |
+| fd_pressure | 450 concurrent connections held | connection count scales linearly with fd usage |
+| recovery | probe + resource comparison | fds/RSS return to baseline, tarpit fully functional |
+
+While the test runs, the daemon side can be watched with:
+
+```sh
+ps -o pid,rss,vsz,time,pledge -p $(pgrep -f tcptarpit.pl)
+fstat -p $(pgrep -f tcptarpit.pl)
+tail -f /var/log/daemon
+```
+
+## Production sizing notes
+
+* Every held connection costs one file descriptor plus roughly a few
+  KiB of memory; 450 held connections were well below the default fd
+  limits in the test run. For larger deployments raise the limit for
+  the daemon class in login.conf (`:openfiles-max=`).
+* Every trapped connection and every disconnect writes one syslog
+  line - a large DDoS generates proportionate log volume. If that
+  matters, switch to `log_file` with newsyslog rotation (see
+  README.md).
+* Held connections are closed by the daemon after `max_age`; the fd
+  count therefore cannot grow indefinitely from passive bots.
