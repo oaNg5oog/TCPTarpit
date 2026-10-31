@@ -37,7 +37,7 @@ my %config = (
     listen_port      => 8024,
     cleanup_interval => 1800,    # seconds between cleanup passes
     max_age          => 1800,    # seconds before a connection is closed
-    max_per_source   => 5,       # held connections per source IP, 0 = unlimited
+    max_per_source   => 100,     # held connections per source IP, 0 = unlimited
     stutter          => 1,       # seconds per dribbled byte, 0 = pure silence
     log_file         => '/var/log/tcptarpit.log',   # empty = stdout/syslog
     pid_file         => '/var/run/tcptarpit/tcptarpit.pid',  # empty = none
@@ -412,10 +412,12 @@ while (1) {
                     close($client);
                     next;
                 }
-                # per-source connection limit: aggressive scanners open
-                # dozens of parallel connections; beyond the limit the
-                # connection is silently closed instead of held (no log
-                # line - a hammering source must not flood the log)
+                # per-source fd protection: held connections are the
+                # punishment for a scanner, so the limit is deliberately
+                # high (default 100 of 1024 fds) - it only caps how much
+                # ONE source can monopolize.  Beyond the limit the
+                # connection is silently closed (no log line - a hammering
+                # source must not flood the log)
                 $per_ip{$ip} = ($per_ip{$ip} // 0) + 1;
                 if ($config{max_per_source} > 0
                     && $per_ip{$ip} > $config{max_per_source}) {

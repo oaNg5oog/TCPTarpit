@@ -8,10 +8,11 @@ diverts their connections to a loopback listener. Like spamd the daemon
 stutters by default: incoming data is read and discarded, and a single
 filler byte is dribbled back per connection per second, so clients keep
 waiting for a response that never properly arrives. Parallel scanners
-are capped per source: at most five connections per address are held
-at a time (`max_per_source`), everything beyond is closed silently.
-Pure silence is available via `stutter=0`, unlimited parallel holds
-via `max_per_source=0`.
+are held per source address up to a high cap (`max_per_source`,
+default 100 - held connections are the punishment, so the limit only
+protects the daemon's own file descriptors; beyond it connections
+are closed silently). Pure silence is available via `stutter=0`,
+unlimited parallel holds via `max_per_source=0`.
 
 The attacker's client sits there waiting, wasting its time and its
 connection slots. The daemon is protocol agnostic: it works for SSH
@@ -95,7 +96,7 @@ upgrade:
 
 ```sh
 rm /usr/ports/packages/<arch>/all/tcptarpit-*.tgz
-PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.8
+PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.9
 ```
 
 The package does everything automatically, like other OpenBSD daemon
@@ -155,13 +156,13 @@ rcctl check  tcptarpit
 
 ### Option C: prebuilt package
 
-`dist/tcptarpit-1.4.8.tgz` is the package built and verified on
+`dist/tcptarpit-1.4.9.tgz` is the package built and verified on
 OpenBSD 8.0/amd64. pkg_add(1) can install it straight from the
 repository URL:
 
 ```sh
 pkg_add -D unsigned \
-    https://github.com/oaNg5oog/TCPTarpit/raw/v1.4.8/dist/tcptarpit-1.4.8.tgz
+    https://github.com/oaNg5oog/TCPTarpit/raw/v1.4.9/dist/tcptarpit-1.4.9.tgz
 ```
 
 Packages are specific to release and architecture - on anything but
@@ -182,7 +183,7 @@ daemons.
 | `listen_port`      | `8024`      | listen port; must match the `rdr-to` rules in pf.conf |
 | `cleanup_interval` | `1800`      | seconds between cleanup passes over stale connections |
 | `max_age`          | `1800`      | seconds before a held connection is closed with FIN |
-| `max_per_source`   | `5`         | held connections per source address; further connects are closed silently; `0` = unlimited |
+| `max_per_source`   | `100`       | per-source fd protection cap; further connects are closed silently; `0` = unlimited |
 | `stutter`          | `1`         | seconds per dribbled filler byte (spamd-style); `0` = pure silence |
 | `log_file`         | `/var/log/tcptarpit.log` | empty = stdout (syslog via daemon(8)) |
 | `pid_file`         | `/var/run/tcptarpit/tcptarpit.pid` | empty = no pid file |
@@ -354,10 +355,12 @@ pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
   family is switched off individually by leaving `listen_ip` or
   `listen_ip6` empty. IPv6 traffic needs separate `inet6` pf rules
   with `rdr-to ::1`.
-* Aggressive parallel scanners can be capped per source with
-  `max_per_source` (default 5): beyond the limit the connection is
-  closed silently - a hammering source must not flood the log.
-  `0` = unlimited.
+* `max_per_source` (default 100) is per-source fd protection, not a
+  behaviour lever: held connections are what punishes a scanner, so
+  the cap is deliberately high and only bounds how much one source
+  can monopolize of the daemon's 1024 descriptors. Beyond the limit
+  connections are closed silently (no log flooding). `0` =
+  unlimited.
 * One process, one single-threaded event loop (`IO::Select`). Per
   connection cost: one file descriptor plus a small hash entry.
 * Incoming data is drained in 64 KiB chunks and discarded - a flooding

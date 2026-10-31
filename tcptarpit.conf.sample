@@ -25,11 +25,12 @@
 # max_age + cleanup_interval.
 #max_age=1800
 
-# Maximum simultaneously held connections per source address.
-# Further connects from the same source are closed silently (no log
-# line per refusal, so a hammering source cannot flood the log).
-# 0 = unlimited.
-#max_per_source=5
+# Per-source fd protection cap: how many connections ONE source
+# address may hold simultaneously.  Held connections are the
+# punishment for a scanner, so the default is deliberately high (100
+# of the daemon's 1024 descriptors) - it only bounds monopolization.
+# Further connects are closed silently.  0 = unlimited.
+#max_per_source=100
 
 # Stutter, like spamd(8): seconds per filler byte dribbled back to the
 # trapped client.  Keeps bots waiting for a real response; 0 disables

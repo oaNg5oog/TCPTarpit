@@ -119,13 +119,16 @@ plus
 Default:
 .Li 1800 .
 .It Ic max_per_source
-Maximum number of simultaneously held connections per source address;
-connections beyond the limit are closed silently, without a log line,
-so that a hammering source cannot flood the log.
+Per-source file descriptor protection cap: how many connections one
+source address may hold simultaneously.
+Held connections are what slows a scanner down, so the default is
+deliberately high and only bounds monopolization of the daemon's
+descriptors; connections beyond the limit are closed silently,
+without a log line.
 .Li 0
 means unlimited.
 Default:
-.Li 5 .
+.Li 100 .
 .It Ic stutter
 Seconds per dribbled filler byte, like
 .Xr spamd 8

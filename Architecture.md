@@ -213,9 +213,11 @@ sends that signal to the pid listed in `pid_file`
 ## Per-source connection limit
 
 Aggressive scanners open dozens of parallel connections (observed in
-production: one source, 20+ connects within seconds). `max_per_source`
-(default 5, 0 = unlimited) caps the simultaneously held connections
-per source address:
+production: one source, 20+ connects within seconds). Held
+connections are the punishment - a quick refusal is cheap for a
+scanner (instant feedback, immediate retry), so the limit is
+deliberately high: `max_per_source` (default 100 of 1024 fds,
+0 = unlimited) is per-source fd protection, not a behaviour lever:
 
 * the counter is incremented on accept; beyond the limit the socket
   is closed immediately and silently - no log line per refusal, so a
