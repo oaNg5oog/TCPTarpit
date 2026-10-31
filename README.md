@@ -346,6 +346,23 @@ name plus PKG_PATH, not a file path), the installed package ships
 `/etc/tcptarpit.conf` survives reinstallation (verified with
 `pkg_add -r`).
 
+Uninstall matrix verified: plain `pkg_delete tcptarpit` removes all
+package files, keeps an admin-modified `/etc/tcptarpit.conf` (with a
+reminder to remove it manually) and keeps the `_tcptarpit` user/group
+(with `userdel`/`groupdel` hints). `pkg_delete -c tcptarpit` with an
+unchanged configuration removes the configuration *and* the
+user/group. One leftover in both cases: the `pkg_scripts` entry in
+`/etc/rc.conf.local` stays, so run `rcctl disable tcptarpit` for a
+complete removal.
+
+Note for isolated systems: even with a package file argument, pkg_add
+consults `/etc/installurl` and hangs silently when the mirror is
+unreachable. Install fully offline with a local package path instead:
+
+```sh
+PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.1
+```
+
 pf interaction verified end to end with httpd(8) on port 80 and no
 listener on 443: 40 established connections within 0.02 s trigger
 `max-src-conn-rate 30/10`, the source lands in `<bruteforcers>`

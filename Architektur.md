@@ -311,6 +311,17 @@ Verified on the OpenBSD 7.9 (amd64) test system (2026-10-31):
   place; admin-modified /etc/tcptarpit.conf survives `pkg_add -r`
   (@sample semantics confirmed); CHANGES lands in
   /usr/local/share/doc/tcptarpit/.
+* Uninstall matrix: plain `pkg_delete` removes all files, keeps a
+  modified configuration (with a manual-removal hint) and keeps
+  user/group (with userdel/groupdel hints); `pkg_delete -c` with an
+  unchanged configuration removes configuration and user/group. The
+  pkg_scripts entry in rc.conf.local survives both - disable
+  explicitly for a complete removal.
+* Isolated systems: pkg_add consults /etc/installurl even for local
+  package files and hangs silently (state I, wchan piperd) when the
+  mirror is unreachable. `PKG_PATH=<local pkgdir> pkg_add -D unsigned
+  <name>` installs fully offline; no stale locks or child processes
+  are left by the SIGINT-aborted runs.
 * pf interplay end to end (httpd on 80, no listener on 443): 40
   established connections in 0.02 s trigger max-src-conn-rate 30/10,
   the source appears in <bruteforcers>, connections to 80 AND 443 are
