@@ -21,8 +21,10 @@ it works for SSH brute forcers as well as HTTP scanners and dir busters.
 | `tcptarpit.pl`        | `/usr/local/bin/tcptarpit.pl`     | 0755 | the daemon (base perl, no ports)   |
 | `tcptarpit`           | `/etc/rc.d/tcptarpit`             | 0555 | rc.d(8) start/stop integration     |
 | `tcptarpit.conf.sample` | `/etc/tcptarpit.conf`           | 0644 | configuration (copy and edit)      |
+| `tcptarpit.login.conf` | `/etc/login.conf.d/tcptarpit`   | 0644 | login class for the daemon user    |
 | `tcptarpit.8`         | `/usr/local/man/man8/tcptarpit.8` | 0444 | manual page in mdoc(7) format      |
 | `port/`               | -                                 | -    | OpenBSD port skeleton (see below)  |
+| `tests/`              | -                                 | -    | load and resource test suite       |
 
 ## Requirements
 
@@ -129,14 +131,14 @@ rcctl check  tcptarpit
 
 ### Option C: prebuilt package
 
-`dist/tcptarpit-1.1.tgz` is the package built and verified on
+`dist/tcptarpit-1.2.0.tgz` is the package built and verified on
 OpenBSD 8.0/amd64. pkg_add(1) can install it straight from the
 repository URL (locally built packages are unsigned, hence
 `-D unsigned`):
 
 ```sh
 pkg_add -D unsigned \
-    https://github.com/oaNg5oog/TCPTarpit/raw/v1.1/dist/tcptarpit-1.1.tgz
+    https://github.com/oaNg5oog/TCPTarpit/raw/v1.2.0/dist/tcptarpit-1.2.0.tgz
 ```
 
 Packages are specific to release and architecture - on anything but
@@ -200,11 +202,24 @@ removes the file on exit.
 
 ## Running unprivileged
 
-Port 8024 needs no root, and the daemon never needs root after startup.
-The shipped rc script already contains `daemon_user="_tcptarpit"`, so
-with the package (or a manual install that created the user as shown
-above) the daemon starts unprivileged from the beginning - nothing to
-do.
+Port 8024 needs no root, and the daemon never needs root after
+startup. The shipped rc script already contains
+`daemon_user="_tcptarpit"`, so with the package (or a manual install
+that created the user as shown above) the daemon starts unprivileged
+from the beginning - nothing to do.
+
+Since 1.2.0 the package also installs a dedicated login class
+`/etc/login.conf.d/tcptarpit` (openfiles-cur=1024, openfiles-max=4096),
+registers it with cap_mkdb(1) automatically and assigns it to the
+`_tcptarpit` user. Without the class the daemon stops accepting new
+connections at the default 128 fd soft limit (verified by the load
+test) - on manual installations create the class yourself:
+
+```sh
+install -m 0644 tcptarpit.login.conf /etc/login.conf.d/tcptarpit
+cap_mkdb /etc/login.conf.d/tcptarpit
+usermod -L tcptarpit _tcptarpit
+```
 
 The in-daemon alternative is the privilege drop via configuration: set
 `user=_tcptarpit` (optionally `group=`) in `/etc/tcptarpit.conf`. The
@@ -404,6 +419,16 @@ service immediately. Note for operations: the rate limits count
 connections with a completed TCP handshake (pf.conf(5)) - bursts of
 SYNs against a closed port create states but do not trigger the
 overload.
+
+**Load and resource test (tests/tarpit-loadtest.pl) on OpenBSD
+8.0/amd64, with the packaged login class active:** 300 concurrent idle
+connections held (307 fds, no measurable RSS growth per connection),
+100 MiB pushed over 50 connections for +1 s daemon CPU, 1500-cycle
+FIN/RST churn for +1 s CPU, 100 slowloris connections at +0 s CPU,
+450 concurrent connections held (457 fds), and full recovery to
+baseline (7 fds) afterwards. Without the login class the daemon
+reaches the default 128 fd soft limit at ~125 connections - the test
+suite documents and covers exactly this.
 
 **Still open:** newsyslog(8) rotation with `log_file`/`pid_file` in
 production, and the in-daemon `setuid` branch (the package path runs

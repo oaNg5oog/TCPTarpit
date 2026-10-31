@@ -215,6 +215,11 @@ In
 .Bl -tag -width Ds
 .It Pa /etc/tcptarpit.conf
 Daemon configuration.
+.It Pa /etc/login.conf.d/tcptarpit
+Login class of the daemon user (file descriptor budget); installed
+and registered with
+.Xr cap_mkdb 1
+by the package.
 .It Pa /usr/local/bin/tcptarpit.pl
 The daemon itself.
 .It Pa /etc/rc.d/tcptarpit

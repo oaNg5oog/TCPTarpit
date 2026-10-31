@@ -35,9 +35,12 @@ tail -f /var/log/daemon
 ## Production sizing notes
 
 * Every held connection costs one file descriptor plus roughly a few
-  KiB of memory; 450 held connections were well below the default fd
-  limits in the test run. For larger deployments raise the limit for
-  the daemon class in login.conf (`:openfiles-max=`).
+  KiB of memory. The default 128 fd soft limit is reached at ~125
+  connections - since 1.2.0 the package ships the `tcptarpit` login
+  class (/etc/login.conf.d/tcptarpit, openfiles 1024/4096) and
+  assigns it to `_tcptarpit` automatically. The load test client also
+  needs a raised limit: run `ulimit -n 1024` first (verified root
+  shell default is 128/1024 soft/hard).
 * Every trapped connection and every disconnect writes one syslog
   line - a large DDoS generates proportionate log volume. If that
   matters, switch to `log_file` with newsyslog rotation (see

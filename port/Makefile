@@ -1,6 +1,6 @@
 COMMENT=	generic layer-4 TCP tarpit for abusive clients
 
-V=		1.1
+V=		1.2.0
 DISTNAME=	tcptarpit-${V}
 CATEGORIES=	net security
 
@@ -28,6 +28,9 @@ do-install:
 	${INSTALL_DATA_DIR} ${PREFIX}/share/examples/tcptarpit
 	${INSTALL_DATA} ${TCPTARPIT_SRCDIR}/tcptarpit.conf.sample \
 		${PREFIX}/share/examples/tcptarpit/tcptarpit.conf
+	${INSTALL_DATA_DIR} ${PREFIX}/share/examples/tcptarpit/login.conf.d
+	${INSTALL_DATA} ${TCPTARPIT_SRCDIR}/tcptarpit.login.conf \
+		${PREFIX}/share/examples/tcptarpit/login.conf.d/tcptarpit
 	${INSTALL_DATA_DIR} ${PREFIX}/share/doc/tcptarpit
 	${INSTALL_DATA} ${TCPTARPIT_SRCDIR}/CHANGES \
 		${PREFIX}/share/doc/tcptarpit/CHANGES

@@ -1,5 +1,22 @@
 tcptarpit - change history
 
+1.2.0 (2026-10-31)
+- dedicated login class for the daemon: the package installs
+  /etc/login.conf.d/tcptarpit (@sample, cap_mkdb runs automatically)
+  with openfiles-cur=1024/openfiles-max=4096, and @newuser assigns the
+  class directly (the loginclass field); upgrades set it via
+  usermod. Without the class the daemon stops accepting at the
+  default 128 fd soft limit (found and verified with the new load
+  test). The class file is self-contained because cap_mkdb builds it
+  standalone - no tc= interpolation from login.conf.
+- tests/: load and resource test suite (tests/tarpit-loadtest.pl)
+  with baseline probe, 300-connection idle flood, 100 MiB data flood,
+  1500-cycle FIN/RST churn, slowloris, 450-connection fd pressure and
+  recovery verification; measures daemon CPU, RSS and fd usage per
+  phase. Verified on OpenBSD 8.0: all phases pass with the login
+  class active (450 held connections, 457 fds, CPU +1 s for 100 MiB,
+  full recovery to baseline).
+
 1.1 (2026-10-31)
 - log how long a bot endured the tarpit: the "gave up" and "aborted"
   messages now include a readable duration (e.g. "1 min 20 s"); the

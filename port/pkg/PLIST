@@ -1,12 +1,17 @@
 @comment uid/gid 960 chosen locally, above the OpenBSD ports registry
 @comment range (registry ends below 910); change both numbers on collision.
 @newgroup _tcptarpit:960
-@newuser _tcptarpit:960:960::tcptarpit daemon:/nonexistent:/sbin/nologin
+@newuser _tcptarpit:960:960:tcptarpit:tcptarpit daemon:/nonexistent:/sbin/nologin
 @rcscript ${RCDIR}/tcptarpit
 bin/tcptarpit.pl
 @man man/man8/tcptarpit.8
 share/doc/tcptarpit/
 share/doc/tcptarpit/CHANGES
 share/examples/tcptarpit/
+share/examples/tcptarpit/login.conf.d/
+share/examples/tcptarpit/login.conf.d/tcptarpit
 share/examples/tcptarpit/tcptarpit.conf
+@sample ${SYSCONFDIR}/login.conf.d/tcptarpit
+@exec [ -f ${SYSCONFDIR}/login.conf.d/tcptarpit ] && cap_mkdb ${SYSCONFDIR}/login.conf.d/tcptarpit
+@exec id _tcptarpit >/dev/null 2>&1 && usermod -L tcptarpit _tcptarpit || true
 @sample ${SYSCONFDIR}/tcptarpit.conf

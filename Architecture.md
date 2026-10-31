@@ -209,6 +209,29 @@ sends that signal to the pid listed in `pid_file`:
 `SIGPIPE` is ignored so a broken syslog pipe cannot kill the daemon;
 `SIGTERM`/`SIGINT` remove the pid file and exit.
 
+## Login class and fd budget
+
+Every held connection costs the daemon one file descriptor. OpenBSD's
+default fd soft limit is 128, so an unprotected daemon stops accepting
+at ~125 connections - found by the load test, not by reading. Since
+1.2.0 the package ships a dedicated login class:
+
+* `tcptarpit.login.conf` is installed as
+  `/etc/login.conf.d/tcptarpit` (one file per class, filename =
+  classname per login.conf(5); takes precedence over login.conf).
+  The class sets `openfiles-cur=1024` and `openfiles-max=4096`.
+* The file must be self-contained: cap_mkdb(1) builds it standalone,
+  and `tc=` interpolation only works within one file (verified:
+  cap_mkdb rejects `tc=daemon` here with "Record not tc expanded").
+* PLIST wiring: `@newuser` assigns the class through its loginclass
+  field (`_tcptarpit:960:960:tcptarpit:...`), `@sample` installs the
+  class file without ever overwriting an edited one, `@exec` runs
+  cap_mkdb after installation, and a second `@exec` applies
+  `usermod -L tcptarpit` on upgrades (an existing user is left
+  untouched by `@newuser`).
+* The load test client needs its own raised limit (`ulimit -n 1024`)
+  - both sides were capped at 128 during the first run.
+
 ## Privilege model
 
 Port 8024 is unprivileged; the daemon never needs root after startup.
@@ -354,6 +377,15 @@ hold duration -> delete restores service) all behave identically to
 still in the package repository, `make package` on 8.0 is a silent
 no-op ("package considered up to date") - remove the old tgz before
 rebuilding after a release upgrade.
+
+* Load and resource suite (tests/tarpit-loadtest.pl) on OpenBSD
+  8.0/amd64 with the login class active: all phases pass - 300 idle
+  connections (307 fds), 100 MiB data flood for +1 s CPU, 1500
+  FIN/RST churn cycles for +1 s CPU, 100 slowloris connections at
+  +0 s CPU, 450 concurrent connections (457 fds), full recovery to
+  baseline (7 fds). Without the class the daemon caps at ~125
+  connections (default 128 fd soft limit) but stays alive and
+  recovers - no crash, no leak.
 
 Still open:
 
