@@ -176,9 +176,13 @@ the tarpit directly.
 **rc.d wrapper details.**
 `rc_bg=YES` runs the foreground daemon through daemon(8);
 `daemon_logger="daemon.info"` makes daemon(8) pipe output to syslog;
-`pexp` is set to `perl /usr/local/bin/tcptarpit.pl` because rc.subr(8)
-must find the interpreter process, not the script file; `rc_reload=NO`
-because the daemon has no reload mechanism.
+`rc_reload=NO` because the daemon has no reload mechanism. For the
+interpreted script the rc script sets `daemon="/usr/bin/perl"` and
+`daemon_flags="/usr/local/bin/tcptarpit.pl"`: OpenBSD 7.9's rc.subr
+rebuilds pexp unconditionally from daemon + daemon_flags (a custom
+pexp is overwritten), and this way the computed pexp matches the
+process list entry `/usr/bin/perl /usr/local/bin/tcptarpit.pl`, so
+check/stop/restart find the process (verified).
 
 ## Logging
 
@@ -283,23 +287,32 @@ with the exact acceptance criteria:
     line; switching to another user without root -> abort; unknown
     user -> abort.
 
-Not testable on the development machine, must be verified on OpenBSD
-after installation:
+Verified on the OpenBSD 7.9 (amd64) test system (2026-10-31):
 
-* Port build and package install: `make install` / `make package` +
-  `pkg_add`, especially the automatic `_tcptarpit` user/group creation
-  (`@newuser`/`@newgroup`), `@rcscript` into /etc/rc.d and `@sample`
-  config handling.
-* pledge(2)/unveil(2) actually taking effect (expect the two log lines
-  `[*] filesystem restricted via unveil(2)` and `[*] pledged to:
-  stdio inet`; then e.g. `ps -o pledge -p <pid>` shows the promised
-  set, and opening any other file must fail).
-* The actual root-to-user `setuid` drop (guard cases are covered above,
-  the setuid branch itself requires starting as root).
-* `rcctl start/stop/check/status` lifecycle including `pkg_scripts`
-  boot start.
-* `daemon_logger` output actually landing in `/var/log/daemon`.
-* newsyslog(8) rotation in production.
+* Port build in `/usr/ports/mystuff/net/tcptarpit` with
+  `make package TCPTARPIT_SRCDIR=...` (after registering uid 960 in
+  /usr/ports/infrastructure/db/user.list - pkg_create refuses
+  unregistered @newuser ids) and install via
+  `pkg_add -D unsigned` (7.9 refuses unsigned packages by default).
+* `_tcptarpit` user/group created automatically by pkg_add
+  (uid/gid 960, confirmed in /var/log/messages), rc.d script in
+  /etc/rc.d, config installed from the sample via @sample.
+* Full rcctl lifecycle enable/start/check/restart/stop: all ok.
+  Note: OpenBSD 7.9's rc.subr rebuilds pexp from daemon+daemon_flags
+  (custom pexp is overwritten), so the rc script runs the interpreter
+  as `daemon` and the script path as `daemon_flags`.
+* pledge(2)/unveil(2) active: log lines on every start, and
+  `ps -o pledge` shows "stdio,inet" with uid/gid 960.
+* daemon_logger path: output lands in /var/log/daemon.
+* Live tarpit catch over loopback: nc connection trapped without any
+  answer, FIN after Ctrl-C logged ("[+] bot trapped" / "[-] bot gave
+  up").
+
+Still open:
+
+* The in-daemon root-to-user `setuid` branch (the package path runs
+  unprivileged from the start via daemon_user, so the drop is a no-op).
+* newsyslog(8) rotation with log_file/pid_file in production.
 * pf interplay: `max-src-conn-rate` overload entries, `rdr-to` redirect
   of listed sources, `flush global` behaviour, whitelisting via an
   `<admins>` quick-pass rule.

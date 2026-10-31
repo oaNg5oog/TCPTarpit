@@ -57,11 +57,23 @@ make package TCPTARPIT_SRCDIR=/root/projects/TCPTarpit
 rc script, man page, config sample). Or build and install in one step
 with `doas make install TCPTARPIT_SRCDIR=...`.
 
-The path of the built `.tgz` is printed at the end, by default:
+One more one-time step: pkg_create(1) refuses `@newuser`/`@newgroup`
+entries whose uid/gid are not in the ports registry, so register the
+daemon uid locally (for an official port, the id would be claimed with
+ports@ instead):
 
 ```sh
-/usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
-doas pkg_add /usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
+echo "960 _tcptarpit _tcptarpit net/tcptarpit" \
+    >> /usr/ports/infrastructure/db/user.list
+```
+
+The path of the built `.tgz` is printed at the end, by default
+`/usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz`. Locally built
+packages are unsigned; since OpenBSD 7.x pkg_add(1) needs an explicit
+acknowledgment for them (verified on 7.9):
+
+```sh
+pkg_add -D unsigned /usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
 ```
 
 The package does everything automatically, like other OpenBSD daemon
@@ -317,15 +329,19 @@ another user without root, abort on unknown user). CPU cost of a 1 MB
 flood burst: ~0 s (the previous 1-byte-read variant needed ~11 s CPU per
 MB). See `Architektur.md` for the measurements.
 
-**Not yet verified on OpenBSD hardware:** building and installing the
-package (`make install` / `make package` + `pkg_add`), especially the
-automatic `_tcptarpit` user/group creation via `@newuser`/`@newgroup`,
-the actual root-to-user `setuid` drop (requires starting as root), the
-rc.d lifecycle (`rcctl start/stop/check/status`), the `daemon_logger`
-path into `/var/log/daemon`, newsyslog(8) rotation in production, and
-the pf table/`rdr-to` interaction. Verify these on the target system
-after installation - see *Installation* and `Architektur.md` for the
-expected results.
+**Verified on OpenBSD 7.9 (amd64) test system:** complete package build
+via `/usr/ports/mystuff` + `make package`, `pkg_add -D unsigned`,
+automatic `_tcptarpit` user/group creation (uid/gid 960, confirmed in
+`/var/log/messages`), file placement incl. `/etc/rc.d/tcptarpit` and
+`/etc/tcptarpit.conf` via `@sample`, the full rcctl lifecycle
+(enable/start/check/restart/stop - all `(ok)`), `daemon_logger` output
+in `/var/log/daemon`, pledge(2) and unveil(2) active (`ps -o pledge`
+shows `stdio,inet`, uid/gid 960) and a live tarpit catch with FIN
+detection (`[+] bot trapped` / `[-] bot gave up`).
+
+**Still open:** newsyslog(8) rotation with `log_file`/`pid_file` in
+production, and the pf `max-src-conn-rate` overload + `rdr-to`
+interaction with real traffic on a firewall interface.
 
 ## Uninstall
 
