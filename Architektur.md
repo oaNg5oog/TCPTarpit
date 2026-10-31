@@ -309,10 +309,18 @@ after installation:
 The `port/` directory contains a complete port skeleton:
 
 ```
-port/Makefile     local port without distfile, installs from this repo
+port/Makefile     local port without distfile, installs from the
+                  repository via TCPTARPIT_SRCDIR (defaults to ../)
 port/pkg/PLIST    file list + @newgroup/@newuser/@rcscript/@sample
 port/pkg/DESCR    package description
 ```
+
+bsd.port.mk derives PKGPATH from the port directory and refuses to
+build outside the ports tree ("Can't find ... under
+PORTSDIR_PATH=/usr/ports:/usr/ports/mystuff" - observed on OpenBSD
+7.9). Local ports therefore live in /usr/ports/mystuff: copy port/ to
+/usr/ports/mystuff/net/tcptarpit and build with
+`make package TCPTARPIT_SRCDIR=<repository>`.
 
 `make install` (or `make package` + `pkg_add tcptarpit-1.0.tgz`) does
 the following automatically, like other OpenBSD daemon packages:

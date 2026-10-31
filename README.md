@@ -40,25 +40,27 @@ ftp https://cdn.openbsd.org/pub/OpenBSD/$(uname -r)/ports.tar.gz
 doas tar -xzf ports.tar.gz -C /usr
 ```
 
-Check out this repository anywhere (the port may live outside
-`/usr/ports`: the base system file `/usr/share/mk/bsd.port.mk` includes
-the real port logic from `PORTSDIR`, which defaults to `/usr/ports`),
-then build and install in one step:
+The port must be built from inside the ports tree: bsd.port.mk derives
+PKGPATH from the directory and refuses to build elsewhere ("Can't find
+... under PORTSDIR_PATH=/usr/ports:/usr/ports/mystuff"). The tree
+`/usr/ports/mystuff` is the designated place for local ports:
 
 ```sh
 git clone https://github.com/oaNg5oog/TCPTarpit.git
-cd TCPTarpit/port
-doas make install
+mkdir -p /usr/ports/mystuff/net
+cp -R TCPTarpit/port /usr/ports/mystuff/net/tcptarpit
+cd /usr/ports/mystuff/net/tcptarpit
+make package TCPTARPIT_SRCDIR=/root/projects/TCPTarpit
 ```
 
-Or build a `.tgz` package first - installable with pkg_add(1) on this or
-another OpenBSD machine of the same release and architecture:
+`TCPTARPIT_SRCDIR` points the build at the repository files (daemon,
+rc script, man page, config sample). Or build and install in one step
+with `doas make install TCPTARPIT_SRCDIR=...`.
+
+The path of the built `.tgz` is printed at the end, by default:
 
 ```sh
-cd TCPTarpit/port
-make package
-# the path of the tgz is printed at the end, by default:
-#   /usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
+/usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
 doas pkg_add /usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
 ```
 
