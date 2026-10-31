@@ -70,13 +70,16 @@ variables is the FreeBSD mechanism, not OpenBSD.)
 `tcptarpit.pl` takes an optional config file argument (default
 `/etc/tcptarpit.conf`):
 
-1. Built-in defaults are defined for all four keys (`listen_ip`,
-   `listen_port`, `cleanup_interval`, `max_age`).
+1. Built-in defaults are defined for all eight keys (`listen_ip`,
+   `listen_port`, `cleanup_interval`, `max_age`, `log_file`,
+   `pid_file`, `user`, `group`).
 2. If the file exists, every `key=value` line overrides a default;
    comments (`#`) and blank lines are ignored.
 3. Unknown keys, lines without `=`, and values that fail validation
-   abort the daemon with a `file:line` message. Failing fast on broken
-   configuration follows the convention of OpenBSD daemons.
+   (IPv4 address, port range, positive intervals, absolute paths,
+   existing user/group) abort the daemon with a `file:line` message.
+   Failing fast on broken configuration follows the convention of
+   OpenBSD daemons.
 4. If the file is absent, the daemon logs a warning and runs on
    defaults, so a bare installation still works.
 
@@ -177,11 +180,55 @@ the tarpit directly.
 must find the interpreter process, not the script file; `rc_reload=NO`
 because the daemon has no reload mechanism.
 
-## Logging path
+## Logging
 
-`print`/`warn` in the daemon -> daemon(8) `-l daemon.info` -> syslogd(8)
--> `/var/log/daemon`. Autoflush (`$| = 1`) is required so lines reach
-syslog promptly.
+Two modes, selected by the `log_file` configuration key:
+
+1. **Default (empty `log_file`):** every message goes to stdout, which
+   daemon(8) pipes to syslogd(8) at `daemon.info` -> `/var/log/daemon`.
+2. **File mode (`log_file=/var/log/tcptarpit.log`):** all messages are
+   appended to that file; stdout stays empty. The file is opened in
+   append mode with autoflush before privileges are dropped, so root
+   only needs to create it once with the right ownership.
+
+All messages go through a single `logmsg()` function - there is no
+direct `print` outside it (config errors on stderr are the exception:
+they occur before logging is initialized).
+
+Rotation: on SIGHUP the daemon reopens the log file. newsyslog(8)
+sends that signal to the pid listed in `pid_file`:
+
+```sh
+/var/log/tcptarpit.log _tarpit:_tarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
+```
+
+`SIGPIPE` is ignored so a broken syslog pipe cannot kill the daemon;
+`SIGTERM`/`SIGINT` remove the pid file and exit.
+
+## Privilege model
+
+Port 8024 is unprivileged; the daemon never needs root after startup.
+Startup order:
+
+1. parse and validate `/etc/tcptarpit.conf`
+2. open the log file (if `log_file` is set)
+3. bind the listen socket
+4. write the pid file (if `pid_file` is set)
+5. drop privileges: `setgid` first, then `setuid` (irreversible), then
+   verify that neither real nor effective uid is 0
+6. enter the event loop
+
+All file descriptors opened in steps 2-4 survive the drop, which is why
+they are opened before it. Three cases are distinguished:
+
+| Situation | Behaviour |
+|-----------|-----------|
+| started as root, `user` set | drop to user/group, logged |
+| already running as `user` (e.g. rc.subr `daemon_user`) | no-op, logged |
+| `user` set to a different user without root | startup aborts |
+
+Running unprivileged from the start via rc.subr's `daemon_user` and the
+in-daemon drop are equivalent end states; both are supported.
 
 ## Testing
 
@@ -202,13 +249,24 @@ with the exact acceptance criteria:
 7. Configuration: missing file -> warning + defaults; valid overrides
    applied (port, intervals); unknown key / bad value / missing `=` each
    abort with `file:line`.
+8. File logging: messages land in `log_file` (stdout stays empty);
+   SIGHUP after renaming the file reopens it and logging continues into
+   the new file; daemon survives.
+9. Pid file: written at startup, contains the daemon pid, removed on
+   SIGTERM together with a clean exit.
+10. Privilege drop guards: running as the same user -> no-op with log
+    line; switching to another user without root -> abort; unknown
+    user -> abort.
 
 Not testable on the development machine, must be verified on OpenBSD
 after installation:
 
+* The actual root-to-user `setuid` drop (guard cases are covered above,
+  the setuid branch itself requires starting as root).
 * `rcctl start/stop/check/status` lifecycle including `pkg_scripts`
   boot start.
 * `daemon_logger` output actually landing in `/var/log/daemon`.
+* newsyslog(8) rotation in production.
 * pf interplay: `max-src-conn-rate` overload entries, `rdr-to` redirect
   of listed sources, `flush global` behaviour, whitelisting via an
   `<admins>` quick-pass rule.

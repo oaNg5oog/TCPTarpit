@@ -91,7 +91,38 @@ plus
 .Ic cleanup_interval .
 Default:
 .Li 1800 .
+.It Ic log_file
+Log into this file instead of stdout.
+Empty (the default) logs to stdout, which
+.Xr daemon 8
+pipes to
+.Xr syslogd 8
+at
+.Dq daemon.info .
+.It Ic pid_file
+Write the process id to this file on startup and remove it on exit.
+Used by
+.Xr newsyslog 8
+to signal the daemon after log rotation.
+.It Ic user
+Drop privileges to this user after the listen socket, log file and pid
+file have been opened.
+Empty (the default) performs no drop; if the daemon already runs as
+that user, the drop is a no-op.
+.It Ic group
+Drop to this group; empty (the default) uses the primary group of
+.Ic user .
 .El
+.Pp
+On
+.Dv SIGHUP
+the daemon reopens its log file, so
+.Xr newsyslog 8
+rotation works with a
+.Ic log_file
+and
+.Ic pid_file
+combination.
 .Sh EXAMPLES
 Install the daemon, enable and start it at boot:
 .Bd -literal -offset indent
@@ -136,6 +167,27 @@ Inspect and edit the address list with
 pfctl -t bruteforcers -T show
 pfctl -t bruteforcers -T delete 203.0.113.7
 .Ed
+.Pp
+Run unprivileged with a dedicated log file and rotation:
+.Bd -literal -offset indent
+useradd -c "tcptarpit daemon" -d /nonexistent -s /sbin/nologin _tarpit
+mkdir -p /var/run/tcptarpit && chown _tarpit /var/run/tcptarpit
+install -o _tarpit -g _tarpit -m 0640 /dev/null /var/log/tcptarpit.log
+.Ed
+.Pp
+In
+.Pa /etc/tcptarpit.conf :
+.Bd -literal -offset indent
+user=_tarpit
+log_file=/var/log/tcptarpit.log
+pid_file=/var/run/tcptarpit/tcptarpit.pid
+.Ed
+.Pp
+In
+.Pa /etc/newsyslog.conf :
+.Bd -literal -offset indent
+/var/log/tcptarpit.log _tarpit:_tarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
+.Ed
 .Sh FILES
 .Bl -tag -width Ds
 .It Pa /etc/tcptarpit.conf
@@ -145,6 +197,9 @@ The daemon itself.
 .It Pa /etc/rc.d/tcptarpit
 .Xr rc.d 8
 control script.
+.It Pa /var/log/tcptarpit.log
+Optional log file (see
+.Ic log_file ) .
 .El
 .Sh SEE ALSO
 .Xr pf 4 ,

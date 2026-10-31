@@ -57,12 +57,61 @@ message, following the fail-fast convention of OpenBSD daemons.
 | `listen_port`      | `8024`      | listen port; must match the `rdr-to` rule in pf.conf |
 | `cleanup_interval` | `1800`      | seconds between cleanup passes over stale connections |
 | `max_age`          | `1800`      | seconds before a held connection is closed with FIN |
+| `log_file`         | *(empty)*   | empty = stdout (syslog via daemon(8)); or an absolute path for file logging |
+| `pid_file`         | *(empty)*   | optional pid file, e.g. `/var/run/tcptarpit/tcptarpit.pid` |
+| `user`             | *(empty)*   | drop privileges to this user after startup (see below) |
+| `group`            | *(empty)*   | drop group; empty = primary group of `user` |
 
 A different configuration file can be passed as the only command line
 argument, e.g. for tests:
 
 ```sh
 rcctl set tcptarpit flags /etc/tcptarpit-test.conf
+```
+
+## Logging
+
+By default everything is logged to stdout, which daemon(8) pipes to
+syslog at `daemon.info` (`/var/log/daemon`).
+
+For a dedicated log file set `log_file=/var/log/tcptarpit.log`. The file
+must exist and be writable by the daemon user:
+
+```sh
+install -o _tarpit -g _tarpit -m 0640 /dev/null /var/log/tcptarpit.log
+```
+
+Rotation through newsyslog(8): the daemon reopens its log file on
+SIGHUP, and newsyslog signals the pid file given in the last column:
+
+```sh
+mkdir -p /var/run/tcptarpit && chown _tarpit /var/run/tcptarpit
+# /etc/newsyslog.conf:
+/var/log/tcptarpit.log _tarpit:_tarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
+```
+
+With `pid_file` set, the daemon writes its process id at startup and
+removes the file on exit.
+
+## Running unprivileged
+
+Port 8024 needs no root. Two supported ways, use either:
+
+1. **rc.subr `daemon_user`** (recommended): uncomment
+   `daemon_user="_tarpit"` in `/etc/rc.d/tcptarpit`. The daemon starts
+   unprivileged from the beginning.
+
+2. **In-daemon privilege drop**: set `user=_tarpit` (optionally
+   `group=`) in `/etc/tcptarpit.conf`. The daemon opens the listen
+   socket, log file and pid file first, then switches uid/gid before
+   entering the event loop. If it is already running as that user the
+   drop is a no-op; switching to another user without root aborts
+   startup.
+
+Create the dedicated user once:
+
+```sh
+useradd -c "tcptarpit daemon" -d /nonexistent -s /sbin/nologin _tarpit
 ```
 
 ## pf configuration
@@ -134,18 +183,6 @@ runtime additions across a reboot, dump the table back:
 pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
 ```
 
-## Optional hardening
-
-Port 8024 is unprivileged, so the daemon does not need root. To run it as a
-dedicated user:
-
-```sh
-useradd -c "tcptarpit daemon" -d /nonexistent -s /sbin/nologin _tarpit
-```
-
-Then uncomment `daemon_user="_tarpit"` in `/etc/rc.d/tcptarpit` and restart
-the service.
-
 ## Behaviour and limits
 
 * The daemon **never sends data** on any trapped connection - that is the
@@ -173,15 +210,20 @@ binary under `/usr/local/bin`.
 Runtime-verified on a development machine (Linux, perl 5.36): listen and
 accept, tarpit silence, FIN and RST detection, parallel connections,
 cleanup kick including real socket close and fd reclaim, configuration
-parsing (defaults, valid overrides, fail-fast on errors), CPU cost of a
-1 MB flood burst (~0 s; the previous 1-byte-read variant needed ~11 s CPU
-per MB). See `Architektur.md` for the measurements.
+parsing (defaults, valid overrides, fail-fast on errors), file logging
+with SIGHUP reopen after rotation, pid file write/remove on TERM, and
+privilege-drop guard cases (no-op as same user, abort when switching to
+another user without root, abort on unknown user). CPU cost of a 1 MB
+flood burst: ~0 s (the previous 1-byte-read variant needed ~11 s CPU per
+MB). See `Architektur.md` for the measurements.
 
-**Not yet verified on OpenBSD hardware:** the rc.d lifecycle
+**Not yet verified on OpenBSD hardware:** the actual root-to-user
+`setuid` drop (requires starting as root), the rc.d lifecycle
 (`rcctl start/stop/check/status`), the `daemon_logger` path into
-`/var/log/daemon`, and the pf table/`rdr-to` interaction. Verify these on
-the target system after installation - see *Installation* and
-`Architektur.md` for the expected results.
+`/var/log/daemon`, newsyslog(8) rotation in production, and the pf
+table/`rdr-to` interaction. Verify these on the target system after
+installation - see *Installation* and `Architektur.md` for the expected
+results.
 
 ## Uninstall
 

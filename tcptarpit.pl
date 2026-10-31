@@ -14,8 +14,10 @@ use strict;
 use warnings;
 use IO::Socket::INET;
 use IO::Select;
+use IO::Handle;
+use POSIX qw(setgid setuid);
 
-$| = 1;    # autoflush, output is piped to syslog via daemon(8) -l
+$| = 1;    # autoflush on stdout, output is piped to syslog via daemon(8) -l
 
 # Configuration: /etc/tcptarpit.conf overrides these defaults.
 my $config_file = shift(@ARGV) // '/etc/tcptarpit.conf';
@@ -24,6 +26,10 @@ my %config = (
     listen_port      => 8024,
     cleanup_interval => 1800,    # seconds between cleanup passes
     max_age          => 1800,    # seconds before a connection is closed
+    log_file         => '',      # empty = stdout (syslog via daemon(8))
+    pid_file         => '',      # empty = no pid file
+    user             => '',      # empty = no privilege drop
+    group            => '',      # empty = primary group of user
 );
 
 #########
@@ -42,6 +48,8 @@ my %config = (
 
 read_config($config_file, \%config);
 validate_config(\%config);
+
+my $log_fh;    # undef = log to stdout
 
 sub read_config {
     my ($path, $cfg) = @_;
@@ -88,7 +96,98 @@ sub validate_config {
             && $cfg->{$key} >= 1
             or die "invalid $key \"$cfg->{$key}\"\n";
     }
+
+    for my $key (qw(log_file pid_file)) {
+        next unless length $cfg->{$key};
+        $cfg->{$key} =~ m|^/|
+            or die "invalid $key \"$cfg->{$key}\": must be an absolute path\n";
+    }
 }
+
+# All daemon messages go through logmsg().  With log_file unset, output
+# goes to stdout, which daemon(8) pipes to syslog (daemon.info).  With
+# log_file set, output is appended to that file instead.
+sub logmsg {
+    my ($msg) = @_;
+    if ($log_fh) { print $log_fh $msg }
+    else         { print $msg }
+}
+
+sub open_log {
+    my ($path) = @_;
+    return unless length $path;
+    open($log_fh, '>>', $path) or die "cannot open log file $path: $!\n";
+    $log_fh->autoflush(1);
+}
+
+# newsyslog(8) sends SIGHUP after rotation (via the pid file): reopen
+# the log file so the daemon keeps logging into the new file.
+sub reopen_log {
+    return unless $log_fh;
+    my $path = $config{log_file};
+    unless (open($log_fh, '>>', $path)) {
+        warn "cannot reopen log file $path after SIGHUP: $!\n";
+        return;
+    }
+    $log_fh->autoflush(1);
+    logmsg("[*] log file reopened after rotation\n");
+}
+
+my $wrote_pidfile = 0;
+
+sub write_pidfile {
+    my ($path) = @_;
+    return unless length $path;
+    open(my $pf, '>', $path) or die "cannot write pid file $path: $!\n";
+    print $pf "$$\n";
+    close($pf);
+    $wrote_pidfile = 1;
+}
+
+sub remove_pidfile {
+    return unless $wrote_pidfile;
+    unlink($config{pid_file})
+        or warn "cannot remove pid file $config{pid_file}: $!\n";
+    $wrote_pidfile = 0;
+}
+
+# Drop root privileges before entering the event loop.  Socket, log file
+# and pid file are already open by then; the descriptors survive setuid.
+# Starting the daemon unprivileged in the first place (rc.subr
+# daemon_user) is equally supported - the drop is then a no-op.
+sub drop_privileges {
+    my ($user, $group) = @_;
+    return unless length $user;
+
+    my ($login, $uid, $gid) = (getpwnam($user))[0, 2, 3];
+    die "unknown user \"$user\"\n" unless defined $uid;
+    if (length $group) {
+        my $group_gid = (getgrnam($group))[2];
+        die "unknown group \"$group\"\n" unless defined $group_gid;
+        $gid = $group_gid;
+    }
+
+    if ($< == 0 || $> == 0) {
+        setgid($gid) or die "setgid($gid) for user \"$user\" failed: $!\n";
+        setuid($uid) or die "setuid($uid) for user \"$user\" failed: $!\n";
+        die "privilege drop to \"$user\" failed\n" if $< == 0 || $> == 0;
+        logmsg("[*] dropped privileges to $login (uid=$uid, gid=$gid)\n");
+    }
+    elsif ($< == $uid && $> == $uid) {
+        logmsg("[*] already running as $login (uid=$uid), no drop needed\n");
+    }
+    else {
+        die "cannot switch to user \"$user\": not running as root\n";
+    }
+}
+
+END { remove_pidfile() }
+$SIG{HUP}  = \&reopen_log;
+$SIG{TERM} = sub { remove_pidfile(); exit 0 };
+$SIG{INT}  = sub { remove_pidfile(); exit 0 };
+$SIG{PIPE} = 'IGNORE';    # a broken syslog pipe must not kill the daemon
+
+open_log($config{log_file});
 
 # main listening socket
 my $server = IO::Socket::INET->new(
@@ -99,8 +198,11 @@ my $server = IO::Socket::INET->new(
     ReuseAddr => 1
     ) or die "cannot create socket: $!\n";
 
-print "generic layer-4 TCP tarpit running on $config{listen_ip}:$config{listen_port}"
-    . " (config: $config_file)\n";
+write_pidfile($config{pid_file});
+drop_privileges($config{user}, $config{group});
+
+logmsg("generic layer-4 TCP tarpit running on $config{listen_ip}:$config{listen_port}"
+    . " (config: $config_file, uid=$<)\n");
 
 my $selector = IO::Select->new($server);
 my %connections;
@@ -120,11 +222,11 @@ while (1) {
                 if (!defined $ip || !defined $port) {
                     # the peer reset the connection before accept()
                     # could query its address - nothing to trap, drop it
-                    print "[-] bot vanished before capture\n";
+                    logmsg("[-] bot vanished before capture\n");
                     close($client);
                     next;
                 }
-                print "[+] bot trapped: $ip:$port\n";
+                logmsg("[+] bot trapped: $ip:$port\n");
 
                 $selector->add($client);
                 # Hash keys are stringified globs, therefore the real
@@ -157,9 +259,9 @@ while (1) {
                 # ("kicking bot ... hold time"), never here.
                 my $ip = $connections{$fh}->{ip};
                 if (defined $res) {
-                    print "[-] bot gave up: $ip\n";
+                    logmsg("[-] bot gave up: $ip\n");
                 } else {
-                    print "[-] bot aborted: $ip ($!)\n";
+                    logmsg("[-] bot aborted: $ip ($!)\n");
                 }
                 $selector->remove($fh);
                 delete $connections{$fh};
@@ -171,11 +273,11 @@ while (1) {
     # periodic cleanup of stale connections
     my $now = time();
     if ($now - $last_cleanup >= $config{cleanup_interval}) {
-        print "[*] starting periodic cleanup of stale connections\n";
+        logmsg("[*] starting periodic cleanup of stale connections\n");
         while (my ($key, $data) = each %connections) {
             if ($now - $data->{start_time} >= $config{max_age}) {
-                printf "[*] kicking bot after %d s hold time: %s:%s\n",
-                    $config{max_age}, $data->{ip}, $data->{port};
+                logmsg(sprintf("[*] kicking bot after %d s hold time: %s:%s\n",
+                    $config{max_age}, $data->{ip}, $data->{port}));
                 # each() yields stringified keys, so remove/close must
                 # go through the handle stored in the record
                 my $sock = $data->{fh};
