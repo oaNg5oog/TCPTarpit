@@ -16,8 +16,11 @@ daemon_user="_tcptarpit"
 . /etc/rc.d/rc.subr
 
 # Interpreted script: rc.subr must find the perl process in the
-# process list instead of the script itself.
-pexp="perl ${daemon}${daemon_flags:+ ${daemon_flags}}"
+# process list instead of the script itself.  The kernel execs the
+# interpreter with its full path (verified on OpenBSD 7.9:
+# "/usr/bin/perl /usr/local/bin/tcptarpit.pl"), so pexp needs the
+# full interpreter path too.
+pexp="/usr/bin/perl ${daemon}${daemon_flags:+ ${daemon_flags}}"
 
 rc_reload=NO
 rc_bg=YES
