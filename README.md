@@ -136,10 +136,12 @@ message, following the fail-fast convention of OpenBSD daemons.
 | `group`            | *(empty)*   | drop group; empty = primary group of `user` |
 
 A different configuration file can be passed as the only command line
-argument, e.g. for tests:
+argument, e.g. for tests.  Because the rc script runs the interpreter
+with the script path as its first flag (see the comment in
+`/etc/rc.d/tcptarpit`), overriding the flags must keep that path:
 
 ```sh
-rcctl set tcptarpit flags /etc/tcptarpit-test.conf
+rcctl set tcptarpit flags "/usr/local/bin/tcptarpit.pl /etc/tcptarpit-test.conf"
 ```
 
 ## Logging
