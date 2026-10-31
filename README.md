@@ -339,9 +339,30 @@ in `/var/log/daemon`, pledge(2) and unveil(2) active (`ps -o pledge`
 shows `stdio,inet`, uid/gid 960) and a live tarpit catch with FIN
 detection (`[+] bot trapped` / `[-] bot gave up`).
 
+Package update verified as well: `pkg_add -D unsigned <file>` upgrades
+in place (`tcctarpit-1.0->1.1: ok`; the `-u` form expects a package
+name plus PKG_PATH, not a file path), the installed package ships
+`share/doc/tcptarpit/CHANGES`, and an admin-modified
+`/etc/tcptarpit.conf` survives reinstallation (verified with
+`pkg_add -r`).
+
+pf interaction verified end to end with httpd(8) on port 80 and no
+listener on 443: 40 established connections within 0.02 s trigger
+`max-src-conn-rate 30/10`, the source lands in `<bruteforcers>`
+(`pfctl -t bruteforcers -T show`), subsequent connections to **both**
+80 and 443 are redirected into the tarpit (HTTP request times out
+silently; 443 changes from "refused" to "connected, then silence"),
+`/var/log/daemon` shows `[+] bot trapped: <real.ip>` and
+`[-] bot gave up after N s: <real.ip>` with the preserved original
+source address, and `pfctl -t bruteforcers -T delete` restores normal
+service immediately. Note for operations: the rate limits count
+connections with a completed TCP handshake (pf.conf(5)) - bursts of
+SYNs against a closed port create states but do not trigger the
+overload.
+
 **Still open:** newsyslog(8) rotation with `log_file`/`pid_file` in
-production, and the pf `max-src-conn-rate` overload + `rdr-to`
-interaction with real traffic on a firewall interface.
+production, and the in-daemon `setuid` branch (the package path runs
+unprivileged from the start).
 
 ## Uninstall
 

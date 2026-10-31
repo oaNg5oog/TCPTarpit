@@ -307,6 +307,24 @@ Verified on the OpenBSD 7.9 (amd64) test system (2026-10-31):
 * Live tarpit catch over loopback: nc connection trapped without any
   answer, FIN after Ctrl-C logged ("[+] bot trapped" / "[-] bot gave
   up").
+* Package update: `pkg_add -D unsigned <file>` upgrades 1.0 -> 1.1 in
+  place; admin-modified /etc/tcptarpit.conf survives `pkg_add -r`
+  (@sample semantics confirmed); CHANGES lands in
+  /usr/local/share/doc/tcptarpit/.
+* pf interplay end to end (httpd on 80, no listener on 443): 40
+  established connections in 0.02 s trigger max-src-conn-rate 30/10,
+  the source appears in <bruteforcers>, connections to 80 AND 443 are
+  then redirected into the tarpit (HTTP request times out silently,
+  443 flips from refused to connected-then-silence), the daemon logs
+  the preserved original source IP, and `pfctl -t bruteforcers -T
+  delete` restores normal service immediately.
+
+Operational finding from the same test: pf's src-limit counter stayed
+at 0 when 40 connections were attempted against a *closed* port
+(RST, no completed handshake) - the overload limits count
+established connections only (pf.conf(5): the 3-way handshake
+ensures the source is not spoofed). SYN-only scanners against closed
+ports are therefore not counted by max-src-conn-rate.
 
 Still open:
 
