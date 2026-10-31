@@ -92,7 +92,7 @@ upgrade:
 
 ```sh
 rm /usr/ports/packages/<arch>/all/tcptarpit-*.tgz
-PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.2
+PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.3
 ```
 
 The package does everything automatically, like other OpenBSD daemon
