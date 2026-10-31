@@ -474,10 +474,14 @@ rebuilding after a release upgrade.
   ::1, trapped with the original v6 source address in the log,
   gave up after 3 s.
 
-Still open:
-
-* The in-daemon root-to-user `setuid` branch (the package path runs
-  unprivileged from the start via daemon_user, so the drop is a no-op).
+* In-daemon setuid drop (verified after the 1.4.9 release): started
+  as root with user=_tcptarpit and empty log/pid paths, the daemon
+  logged "dropped privileges to _tcptarpit (uid=960, gid=960)",
+  locked unveil empty, pledged to stdio,inet, and the kernel showed
+  uid/gid 960 with a live catch through the dropped process. Both
+  privilege models (rc.subr daemon_user from the first statement,
+  in-daemon drop before the event loop) are proven - no remaining
+  open items.
 
 ## OpenBSD port and automatic daemon user
 

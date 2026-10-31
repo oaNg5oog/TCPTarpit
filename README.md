@@ -431,8 +431,13 @@ production as well: a real IPv6 scanner was trapped through the
 inet6 pf rule and rdr-to ::1 ("[+] bot trapped: 2a06:...:60573",
 gave up after 3 s).
 
-**Still open:** the in-daemon `setuid` branch (the package path runs
-unprivileged from the start).
+**In-daemon `setuid` drop (verified):** started as root with
+`user=_tcptarpit`, the daemon opens its resources, drops to uid/gid
+960 before the event loop ("[*] dropped privileges" log line, kernel
+proof via `ps -o uid,pledge`: 960/960, `stdio,inet`) and traps
+normally. Together with the rc.subr path (unprivileged from the
+first statement) both privilege models are now proven. No remaining
+open items.
 
 ## Uninstall
 
