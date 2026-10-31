@@ -1,5 +1,14 @@
 tcptarpit - change history
 
+1.4.5 (2026-10-31)
+- fix startup failure after installs where /var/log/tcptarpit.log or
+  /var/run/tcptarpit already existed with wrong ownership: the daemon
+  runs as _tcptarpit from its first statement on (rc.subr
+  daemon_user), so a root-owned file left over from a botched install
+  or a manual root run made open_log() die with "Permission denied".
+  The package now chowns the log file and the run directory to
+  _tcptarpit on every install, in addition to creating them.
+
 1.4.4 (2026-10-31)
 - fix wrong content in /etc/login.conf.d/tcptarpit on fresh installs:
   @sample copies the last preceding file of the PLIST, and the daemon
