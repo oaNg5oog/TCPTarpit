@@ -13,7 +13,7 @@
 bin/tcptarpit.pl
 @man man/man8/tcptarpit.8
 share/doc/pkg-readmes/tcptarpit
-@exec echo "tcctarpit installed - post-installation guide: ${PREFIX}/share/doc/pkg-readmes/tcptarpit"
+@exec echo "tcptarpit installed - post-installation guide: ${PREFIX}/share/doc/pkg-readmes/tcptarpit"
 @exec echo "quick start: rcctl enable tcptarpit && rcctl start tcptarpit"
 share/doc/tcptarpit/
 share/doc/tcptarpit/CHANGES
