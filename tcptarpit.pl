@@ -37,6 +37,7 @@ my %config = (
     listen_port      => 8024,
     cleanup_interval => 1800,    # seconds between cleanup passes
     max_age          => 1800,    # seconds before a connection is closed
+    max_per_source   => 0,       # held connections per source IP, 0 = unlimited
     stutter          => 1,       # seconds per dribbled byte, 0 = pure silence
     log_file         => '/var/log/tcptarpit.log',   # empty = stdout/syslog
     pid_file         => '/var/run/tcptarpit/tcptarpit.pid',  # empty = none
@@ -121,6 +122,9 @@ sub validate_config {
             && $cfg->{$key} >= 1
             or die "invalid $key \"$cfg->{$key}\"\n";
     }
+
+    $cfg->{max_per_source} =~ /^\d+$/
+        or die "invalid max_per_source \"$cfg->{max_per_source}\" (0 = unlimited)\n";
 
     $cfg->{stutter} =~ /^\d+$/
         or die "invalid stutter \"$cfg->{stutter}\" (seconds per byte, 0 = off)\n";
@@ -353,8 +357,18 @@ logmsg("generic layer-4 TCP tarpit running on "
 
 my $selector = IO::Select->new(@servers);
 my %connections;
+my %per_ip;    # held connections per source address (max_per_source)
 my $last_cleanup = time();
 my $accept_err_logged = 0;
+
+# release one per-source slot; every connection exit path calls this
+# exactly once with the address it was registered under
+sub release_source {
+    my ($ip) = @_;
+    return unless defined $ip && exists $per_ip{$ip};
+    $per_ip{$ip}--;
+    delete $per_ip{$ip} if $per_ip{$ip} <= 0;
+}
 
 while (1) {
     # wait for events; with stuttering active, wake up in time for the
@@ -398,6 +412,19 @@ while (1) {
                     close($client);
                     next;
                 }
+                # per-source connection limit: aggressive scanners open
+                # dozens of parallel connections; beyond the limit the
+                # connection is closed immediately instead of held
+                $per_ip{$ip} = ($per_ip{$ip} // 0) + 1;
+                if ($config{max_per_source} > 0
+                    && $per_ip{$ip} > $config{max_per_source}) {
+                    logmsg("[-] bot refused: $ip (over max_per_source "
+                        . "$config{max_per_source})\n");
+                    close($client);
+                    $per_ip{$ip}--;
+                    next;
+                }
+
                 logmsg("[+] bot trapped: $ip:$port\n");
 
                 $selector->add($client);
@@ -462,6 +489,7 @@ while (1) {
                 $selector->remove($fh);
                 delete $connections{$fh};
                 close($fh);
+                release_source($ip);
             }
         }
     }
@@ -497,6 +525,7 @@ while (1) {
                 $selector->remove($sock);
                 close($sock);
                 delete $connections{$key};
+                release_source($rec->{ip});
                 next;
             }
             $rec->{sent_bytes} += $wrote;
@@ -518,6 +547,7 @@ while (1) {
                 $selector->remove($sock);
                 close($sock);
                 delete $connections{$key};
+                release_source($data->{ip});
             }
         }
         $last_cleanup = $now;

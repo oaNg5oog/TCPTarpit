@@ -63,7 +63,7 @@ tcptarpit_statistic() {
 	echo "  kicked:   $(grep -c 'kicking bot' $log)"
 	echo ""
 	echo "  top sources:"
-	grep 'bot trapped' $log | awk '{print $NF}' | cut -d: -f1 \
+	grep 'bot trapped' $log | awk '{print $NF}' | sed 's/:[^:]*$//' \
 		| sort | uniq -c | sort -rn | head -10 | sed 's/^/    /'
 	echo ""
 	echo "  hold times (seconds):"
