@@ -12,6 +12,8 @@ tcptarpit - change history
   build; uid/gid 960 must be registered in
   /usr/ports/infrastructure/db/user.list for @newuser/@newgroup
 - port: install this file as share/doc/tcptarpit/CHANGES
+- ISC licence added (LICENCE); the port declares it with
+  PERMIT_PACKAGE and the customary "# ISC" comment
 - README: the pf.conf example now includes a stateful
   `pass out ... keep state` rule - building a complete ruleset from
   the fragment without it silently breaks the system's own outgoing

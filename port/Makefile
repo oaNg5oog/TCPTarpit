@@ -8,6 +8,7 @@ CATEGORIES=	net security
 # source repository via TCPTARPIT_SRCDIR below.
 DISTFILES=
 
+# ISC
 PERMIT_PACKAGE=	Yes
 
 NO_BUILD=	Yes
