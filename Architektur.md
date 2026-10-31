@@ -216,7 +216,32 @@ Startup order:
 4. write the pid file (if `pid_file` is set)
 5. drop privileges: `setgid` first, then `setuid` (irreversible), then
    verify that neither real nor effective uid is 0
-6. enter the event loop
+6. unveil(2): reduce the filesystem view, then lock it
+7. pledge(2): reduce the syscall set
+8. enter the event loop
+
+### pledge(2) and unveil(2)
+
+Both OpenBSD security mechanisms are applied right before the event
+loop, in the prescribed order (unveil first, because a restrictive
+pledge blocks further unveils):
+
+* **unveil**: only the log file (`"wc"` - reopen after newsyslog(8)
+  rotation opens with O_CREAT and appends) and the directory of the
+  pid file (`"wc"` - unlink on exit, recreate on restart) remain
+  visible. With neither key configured, unveils are locked empty: the
+  daemon has no filesystem access at all.
+* **pledge**: `inet` for the socket work (accept, getpeername);
+  `stdio` is always implied by OpenBSD::Pledge. `wpath cpath` are only
+  pledged when a log file is configured (SIGHUP reopen), `cpath` only
+  when a pid file is configured (unlink on exit). The daemon never
+  forks, execs, or resolves DNS (the config only accepts IPv4
+  literals), so no further promises are needed.
+
+Both steps log a line on success, so the restriction is verifiable in
+the log; on other platforms the daemon logs
+`pledge/unveil unavailable` and runs without them (the perl modules
+OpenBSD::Pledge/OpenBSD::Unveil only exist in the OpenBSD base system).
 
 All file descriptors opened in steps 2-4 survive the drop, which is why
 they are opened before it. Three cases are distinguished:
@@ -265,6 +290,10 @@ after installation:
   `pkg_add`, especially the automatic `_tcptarpit` user/group creation
   (`@newuser`/`@newgroup`), `@rcscript` into /etc/rc.d and `@sample`
   config handling.
+* pledge(2)/unveil(2) actually taking effect (expect the two log lines
+  `[*] filesystem restricted via unveil(2)` and `[*] pledged to:
+  stdio inet`; then e.g. `ps -o pledge -p <pid>` shows the promised
+  set, and opening any other file must fail).
 * The actual root-to-user `setuid` drop (guard cases are covered above,
   the setuid branch itself requires starting as root).
 * `rcctl start/stop/check/status` lifecycle including `pkg_scripts`

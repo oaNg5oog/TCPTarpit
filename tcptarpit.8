@@ -52,6 +52,18 @@ at
 .Dq daemon.info
 through
 .Xr daemon 8 .
+.Pp
+On
+.Ox ,
+the daemon restricts itself after startup using
+.Xr unveil 2
+and
+.Xr pledge 2 :
+the filesystem view is limited to the log file and the pid file
+directory (if configured), and the syscall set to
+.Dq stdio inet
+plus the minimum required for reopening the log file after rotation
+and removing the pid file on exit.
 .Sh CONFIGURATION
 If present,
 .Nm
@@ -213,6 +225,10 @@ Optional log file (see
 .Ic log_file ) .
 .El
 .Sh SEE ALSO
+.Xr pledge 2 ,
+.Xr unveil 2 ,
+.Xr OpenBSD::Pledge 3p ,
+.Xr OpenBSD::Unveil 3p ,
 .Xr pf 4 ,
 .Xr pf.conf 5 ,
 .Xr daemon 8 ,

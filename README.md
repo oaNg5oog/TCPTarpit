@@ -179,6 +179,33 @@ switches uid/gid before entering the event loop. If it is already
 running as that user the drop is a no-op; switching to another user
 without root aborts startup.
 
+## Security: pledge(2) and unveil(2)
+
+Like any OpenBSD-conformant daemon, tcptarpit restricts itself after
+startup with the OpenBSD kernel security mechanisms, in this order:
+
+1. **unveil(2)** reduces the filesystem view to the paths the daemon
+   still touches after startup: the log file (`wc`, reopen on SIGHUP
+   after newsyslog rotation) and the pid file directory (`wc`, unlink
+   on exit). With neither `log_file` nor `pid_file` configured, unveils
+   are locked immediately and the daemon has no filesystem access at
+   all - it is a pure network service.
+2. **pledge(2)** limits the available syscalls to `stdio` (implied) and
+   `inet` (socket, accept, getpeername). `wpath cpath` are added when a
+   log file is configured (reopen with O_CREAT on SIGHUP), `cpath` when
+   a pid file is configured (unlink on exit).
+
+Both steps are logged, so a successful restriction is verifiable in
+`/var/log/daemon`:
+
+```
+[*] filesystem restricted via unveil(2)
+[*] pledged to: stdio inet
+```
+
+On non-OpenBSD platforms the daemon logs `pledge/unveil unavailable`
+instead and runs without these restrictions.
+
 ## pf configuration
 
 Merge this into `/etc/pf.conf` (adjust `ext_if` and the port lists to your

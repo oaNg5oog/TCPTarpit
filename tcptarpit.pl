@@ -16,6 +16,7 @@ use IO::Socket::INET;
 use IO::Select;
 use IO::Handle;
 use POSIX qw(setgid setuid);
+use File::Basename qw(dirname);
 
 $| = 1;    # autoflush on stdout, output is piped to syslog via daemon(8) -l
 
@@ -181,6 +182,51 @@ sub drop_privileges {
     }
 }
 
+# pledge(2) and unveil(2), the OpenBSD security mechanisms.  Both perl
+# modules are part of the OpenBSD base system; on other platforms the
+# daemon logs a notice and runs without them.
+my $has_pledge = eval { require OpenBSD::Pledge;  1 } ? 1 : 0;
+my $has_unveil = eval { require OpenBSD::Unveil; 1 } ? 1 : 0;
+
+# Restrict the filesystem view to the paths the daemon still touches
+# after startup: the log file (reopen on SIGHUP, i.e. after newsyslog(8)
+# rotation) and the directory of the pid file (unlink on exit).  With
+# neither configured, the lock alone denies every filesystem access -
+# the daemon is a pure network service then.  unveil(2) must happen
+# before pledge(2).
+sub apply_unveil {
+    return unless $has_unveil;
+
+    if (length $config{log_file}) {
+        OpenBSD::Unveil::unveil($config{log_file}, "wc")
+            or die "unveil($config{log_file}) failed: $!\n";
+    }
+    if (length $config{pid_file}) {
+        my $dir = dirname($config{pid_file});
+        OpenBSD::Unveil::unveil($dir, "wc")
+            or die "unveil($dir) failed: $!\n";
+    }
+    OpenBSD::Unveil::unveil()    # lock: no further unveil calls
+        or die "unable to lock unveil: $!\n";
+    logmsg("[*] filesystem restricted via unveil(2)\n");
+}
+
+# Restrict the available syscalls: network sockets (accept, getpeername)
+# plus the minimum needed for log reopening and pid file removal.
+# "stdio" is always implied by the OpenBSD::Pledge module.
+sub apply_pledge {
+    return unless $has_pledge;
+
+    my @promises = qw(inet);
+    push @promises, qw(wpath cpath) if length $config{log_file};
+    push @promises, 'cpath'
+        if length $config{pid_file} && !length $config{log_file};
+
+    OpenBSD::Pledge::pledge(@promises)
+        or die "pledge(@promises) failed: $!\n";
+    logmsg("[*] pledged to: stdio @promises\n");
+}
+
 END { remove_pidfile() }
 $SIG{HUP}  = \&reopen_log;
 $SIG{TERM} = sub { remove_pidfile(); exit 0 };
@@ -200,6 +246,12 @@ my $server = IO::Socket::INET->new(
 
 write_pidfile($config{pid_file});
 drop_privileges($config{user}, $config{group});
+if ($has_pledge or $has_unveil) {
+    apply_unveil();
+    apply_pledge();
+} else {
+    logmsg("[*] pledge/unveil unavailable (not OpenBSD?), running without\n");
+}
 
 logmsg("generic layer-4 TCP tarpit running on $config{listen_ip}:$config{listen_port}"
     . " (config: $config_file, uid=$<)\n");
