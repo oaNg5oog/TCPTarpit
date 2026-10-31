@@ -340,7 +340,7 @@ shows `stdio,inet`, uid/gid 960) and a live tarpit catch with FIN
 detection (`[+] bot trapped` / `[-] bot gave up`).
 
 Package update verified as well: `pkg_add -D unsigned <file>` upgrades
-in place (`tcctarpit-1.0->1.1: ok`; the `-u` form expects a package
+in place (`tcptarpit-1.0->1.1: ok`; the `-u` form expects a package
 name plus PKG_PATH, not a file path), the installed package ships
 `share/doc/tcptarpit/CHANGES`, and an admin-modified
 `/etc/tcptarpit.conf` survives reinstallation (verified with
