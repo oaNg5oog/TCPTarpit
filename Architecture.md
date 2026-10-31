@@ -306,10 +306,14 @@ pledge blocks further unveils):
   daemon has no filesystem access at all.
 * **pledge**: `inet` for the socket work (accept, getpeername);
   `stdio` is always implied by OpenBSD::Pledge. `wpath cpath` are only
-  pledged when a log file is configured (SIGHUP reopen), `cpath` only
-  when a pid file is configured (unlink on exit). The daemon never
-  forks, execs, or resolves DNS (the config only accepts IPv4
-  literals), so no further promises are needed.
+  pledged when a log file is configured (SIGHUP reopen), and
+  `cpath rpath` when a pid file is configured: perl's unlink() runs an
+  internal lstat() first, which pledge counts as "rpath" - without it
+  every shutdown ended in a pledge abort with a core dump (found via
+  ktrace on OpenBSD 8.0). Correspondingly the pid file is unveiled
+  with "cr": "r" for the lstat, "c" for the removal; the directory
+  unveil alone does not permit the removal. The daemon never forks,
+  execs, or resolves DNS, so no further promises are needed.
 
 Both steps log a line on success, so the restriction is verifiable in
 the log; on other platforms the daemon logs

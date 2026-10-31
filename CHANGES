@@ -11,6 +11,14 @@ tcptarpit - change history
   editable). SIGHUP reopens the log after rotation, signaled via the
   pid file. Empty log_file restores the previous stdout/syslog
   behaviour.
+- three shutdown/rotation defects found by the OpenBSD 8.0 tests and
+  fixed: a failed log reopen lost all further messages (now falls
+  back to stdout and retries on every SIGHUP); every SIGTERM/SIGINT
+  ended in a pledge abort because perl's unlink() lstat()s the pid
+  file (rpath is now pledged when a pid file is configured); and the
+  pid file survived the shutdown because the directory unveil alone
+  does not permit the removal (the file itself is unveiled with "cr"
+  now).
 
 1.3.0 (2026-10-31)
 - stutter mode like spamd(8): by default one filler byte is dribbled
