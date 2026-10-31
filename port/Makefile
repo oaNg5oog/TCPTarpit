@@ -5,9 +5,8 @@ DISTNAME=	tcptarpit-${V}
 CATEGORIES=	net security
 
 # Local port: no distfile, the files are installed directly from the
-# parent source repository.
-MASTER_SITES=
-EXTRACT_ONLY=
+# source repository via TCPTARPIT_SRCDIR below.
+DISTFILES=
 
 PERMIT_PACKAGE=	Yes
 
