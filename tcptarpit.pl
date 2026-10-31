@@ -2,9 +2,12 @@
 #
 # tcptarpit.pl -- generic layer-4 TCP tarpit for OpenBSD/pf.
 #
-# Listens on 127.0.0.1:8024 and never sends a single byte back.  Traffic
-# is diverted here by pf (rdr-to) once a source has been overloaded into
-# the <bruteforcers> table, e.g. by max-src-conn-rate rules.
+# Listens on loopback (127.0.0.1 and ::1 by default) and never yields a
+# real answer: incoming data is discarded and at most one filler byte
+# per connection per stutter interval is dribbled back, spamd-style.
+# Traffic is diverted here by pf (rdr-to) once a source has been
+# overloaded into the <bruteforcers> table, e.g. by max-src-conn-rate
+# rules.
 #
 # Install as /usr/local/bin/tcptarpit.pl, configuration goes into
 # /etc/tcptarpit.conf (see tcptarpit.conf.sample).  Started via the
@@ -16,9 +19,14 @@ use IO::Socket::IP;
 use IO::Select;
 use IO::Handle;
 use POSIX qw(setgid setuid);
+use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use File::Basename qw(dirname);
 
 $| = 1;    # autoflush on stdout, output is piped to syslog via daemon(8) -l
+
+# total dribble per connection is capped so the send buffer can never
+# fill up completely, independent of kernel send buffer sizing
+use constant STUTTER_CAP => 32000;
 
 # Configuration: /etc/tcptarpit.conf overrides these defaults.
 my $config_file = shift(@ARGV) // '/etc/tcptarpit.conf';
@@ -337,15 +345,21 @@ logmsg("generic layer-4 TCP tarpit running on "
 my $selector = IO::Select->new(@servers);
 my %connections;
 my $last_cleanup = time();
+my $accept_err_logged = 0;
 
 while (1) {
     # wait for events; with stuttering active, wake up in time for the
-    # next byte due to a connection (otherwise up to 10 seconds)
+    # next byte due to a connection (otherwise up to 10 seconds).
+    # Connections that reached the dribble cap do not participate:
+    # their deadline is stale and would pin the timeout at zero, busy
+    # looping the daemon.
     my $timeout = 10;
     if ($config{stutter} > 0) {
         my ($now, $earliest) = (time());
         for my $key (keys %connections) {
-            my $when = $connections{$key}->{next_stutter};
+            my $rec = $connections{$key};
+            next if $rec->{sent_bytes} >= STUTTER_CAP;
+            my $when = $rec->{next_stutter};
             $earliest = $when if !defined $earliest || $when < $earliest;
         }
         if (defined $earliest) {
@@ -356,11 +370,16 @@ while (1) {
     }
     my @ready = $selector->can_read($timeout);
 
+    my $accepted = 0;
     foreach my $fh (@ready) {
         if (grep { $fh == $_ } @servers) {
             # new connection on one of the listening sockets
             my $client = $fh->accept();
             if ($client) {
+                # non-blocking: a full send buffer must suspend the
+                # dribble instead of blocking the whole event loop
+                $client->blocking(0);
+                $accepted++;
                 my $ip   = $client->peerhost();
                 my $port = $client->peerport();
                 if (!defined $ip || !defined $port) {
@@ -383,6 +402,16 @@ while (1) {
                     next_stutter => time() + $config{stutter},
                     sent_bytes   => 0,
                 };
+            } else {
+                # accept failed (usually EMFILE at the fd limit): the
+                # listening socket stays readable while connections
+                # keep arriving, which would spin the loop at full CPU.
+                # Log once and pace the retry.
+                if (!$accept_err_logged) {
+                    logmsg("[!] accept() failed: $! - file descriptor limit reached?\n");
+                    $accept_err_logged = 1;
+                }
+                select(undef, undef, undef, 0.1);
             }
         } else {
             # a client socket became readable: data, EOF or error
@@ -392,6 +421,10 @@ while (1) {
             # runs full; sysread returning 0 means EOF (FIN), undef
             # means error (e.g. RST).
             my $res = sysread($fh, $buffer, 65536);
+            if (!defined $res && ($! == EAGAIN || $! == EWOULDBLOCK || $! == EINTR)) {
+                # spurious wakeup on a non-blocking socket - nothing to do
+                next;
+            }
 
             if (defined $res && $res > 0) {
                 # the bot sent data, we ignore it on purpose; the socket
@@ -419,19 +452,27 @@ while (1) {
     }
 
     # stutter pass: dribble one byte per connection per interval, like
-    # spamd(8).  sent_bytes is capped so the send buffer can never fill
-    # up and block the daemon, even for very large max_age values; a
-    # connection whose peer never reads simply stops receiving dribble
-    # and is still held and closed at max_age.
+    # spamd(8).  Client sockets are non-blocking, so a full send buffer
+    # (peer never reads) suspends the dribble for that connection with
+    # EAGAIN instead of blocking the whole event loop; the total dribble
+    # is capped (STUTTER_CAP) as a second guard.  A connection whose
+    # peer never reads simply stops receiving dribble and is still held
+    # and closed at max_age.
     if ($config{stutter} > 0) {
         my $now = time();
         for my $key (keys %connections) {
             my $rec = $connections{$key};
             next if $now < $rec->{next_stutter};
-            next if $rec->{sent_bytes} >= 32000;
+            next if $rec->{sent_bytes} >= STUTTER_CAP;
             my $sock = $rec->{fh};
             my $wrote = syswrite($sock, ' ');
             if (!defined $wrote) {
+                if ($! == EAGAIN || $! == EWOULDBLOCK) {
+                    # send buffer full: suspend the dribble for this
+                    # connection, retry at the next interval
+                    $rec->{next_stutter} = $now + $config{stutter};
+                    next;
+                }
                 # write error, usually a reset: the connection is gone
                 my $held = fmt_duration($now - $rec->{start_time});
                 logmsg("[-] bot aborted after $held: $rec->{ip} (write: $!)\n");

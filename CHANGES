@@ -1,5 +1,21 @@
 tcptarpit - change history
 
+1.4.2 (2026-10-31)
+- production hardening from the final pre-deployment audit, three
+  edge-case defects fixed:
+  * busy loop: a connection that reached the dribble cap kept a stale
+    stutter deadline and pinned the select timeout at zero (100 % CPU
+    with large max_age values); capped connections no longer
+    participate in the deadline computation
+  * blocking write: the stutter byte was written to blocking sockets,
+    so a full send buffer (peer never reads, small tcp sendspace)
+    could freeze the whole event loop; client sockets are non-blocking
+    now and EAGAIN suspends the dribble for that connection, read
+    side handles spurious EAGAIN wakeups
+  * accept spin: at the fd limit with connections still arriving, the
+    readable listening socket caused an unlogged full-CPU loop;
+    accept failures are now logged once and paced at 10 retries/s
+
 1.4.1 (2026-10-31)
 - documentation overhaul: README brought up to the state of 1.4.0
   (stutter and IPv6 defaults, file logging with newsyslog rotation,

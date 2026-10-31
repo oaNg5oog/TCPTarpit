@@ -222,14 +222,24 @@ Implementation notes:
 
 * the select timeout shrinks to the earliest due byte, so the event
   loop wakes at most once per interval; per wake-up one byte per due
-  connection is written.
-* the dribble per connection is capped at 32 KiB: a peer that never
-  reads stops receiving filler instead of filling the socket send
-  buffer - the daemon can never block on a write, independent of
-  max_age and stutter settings.
+  connection is written. Connections that reached the dribble cap do
+  not participate in the deadline computation - their stale deadline
+  would pin the timeout at zero and busy-loop the daemon (found in
+  the pre-deployment audit with large max_age values).
+* client sockets are non-blocking: a full send buffer (peer never
+  reads, small kernel send buffer) suspends the dribble for that
+  connection with EAGAIN instead of blocking the whole event loop.
+  The read side treats spurious EAGAIN wakeups as nothing-to-do.
+* the dribble per connection is capped at 32 KiB as a second guard:
+  a peer that never reads stops receiving filler and is still held
+  and closed at max_age.
 * a failed write (typically a reset) closes the connection through
   the same path as a read-side abort, with hold duration and error
   in the log.
+* accept() failures (fd limit reached while connections keep
+  arriving) are logged once and paced at 10 retries per second -
+  without the pacing the permanently readable listening socket spun
+  the loop at full CPU.
 * resource cost is one byte per connection per interval - 450 held
   connections produce ~450 B/s of traffic (measured in the load
   test: no CPU increase, no RSS increase).

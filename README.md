@@ -92,7 +92,7 @@ upgrade:
 
 ```sh
 rm /usr/ports/packages/<arch>/all/tcptarpit-*.tgz
-PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.1
+PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.2
 ```
 
 The package does everything automatically, like other OpenBSD daemon
@@ -152,13 +152,13 @@ rcctl check  tcptarpit
 
 ### Option C: prebuilt package
 
-`dist/tcptarpit-1.4.1.tgz` is the package built and verified on
+`dist/tcptarpit-1.4.2.tgz` is the package built and verified on
 OpenBSD 8.0/amd64. pkg_add(1) can install it straight from the
 repository URL:
 
 ```sh
 pkg_add -D unsigned \
-    https://github.com/oaNg5oog/TCPTarpit/raw/v1.4.1/dist/tcptarpit-1.4.1.tgz
+    https://github.com/oaNg5oog/TCPTarpit/raw/v1.4.2/dist/tcptarpit-1.4.2.tgz
 ```
 
 Packages are specific to release and architecture - on anything but
