@@ -32,6 +32,7 @@ brute forcers as well as HTTP scanners and dir busters.
 | `tcptarpit.8`         | `/usr/local/man/man8/tcptarpit.8` - mdoc(7) manual page | 0444 |
 | `LICENCE`             | ISC licence                       | -      |
 | `CHANGES`             | change history (installed under `share/doc/tcptarpit/`) | - |
+| `Architecture.md`     | design document with all measurements | - |
 | `port/`               | OpenBSD port skeleton             | -      |
 | `tests/`              | load and resource test suite      | -      |
 | `dist/`               | prebuilt package (see Option C)   | -      |
@@ -69,9 +70,9 @@ PKGPATH from the directory and refuses to build elsewhere. The tree
 ```sh
 git clone https://github.com/oaNg5oog/TCPTarpit.git
 mkdir -p /usr/ports/mystuff/net
-cp -R TCCTarpit/port /usr/ports/mystuff/net/tcptarpit
+cp -R TCPTarpit/port /usr/ports/mystuff/net/tcptarpit
 cd /usr/ports/mystuff/net/tcptarpit
-make package TCPTARPIT_SRCDIR=/root/projects/TCPTarpit
+make package TCPTARPIT_SRCDIR="$PWD/TCPTarpit"
 ```
 
 `TCPTARPIT_SRCDIR` points the build at the repository files. Or build
@@ -126,6 +127,7 @@ ls -l /etc/rc.d/tcptarpit /etc/tcptarpit.conf /etc/login.conf.d/tcptarpit
 rcctl enable tcptarpit && rcctl start tcptarpit
 rcctl check tcptarpit
 tail -f /var/log/tcptarpit.log   # expect: "generic layer-4 TCP tarpit running ..."
+/etc/rc.d/tcptarpit statistic    # who is trapped right now + counters
 ```
 
 ### Option B: manual installation
@@ -322,6 +324,7 @@ stdout mode):
 | `[*] starting periodic cleanup of stale connections`| cleanup pass started                      |
 | `[*] kicking bot after N s/min/h/d hold time: IP:PORT` | daemon timeout after exceeding `max_age` |
 | `[*] log file reopened after rotation`              | SIGHUP: logging continues in the new file |
+| `[!] accept() failed: ERROR`                        | accept error (usually the fd limit); logged once, paced |
 
 ## Operating the blocklist
 
@@ -336,6 +339,45 @@ the table is seeded at load time. To persist runtime additions:
 
 ```sh
 pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
+```
+
+## Monitoring
+
+`/etc/rc.d/tcptarpit statistic` shows everything at a glance: the bots
+currently held by the daemon (with their addresses and connection
+counts - the tarpit is the only listener on its port, so the
+ESTABLISHED foreign addresses are exactly the trapped bots), the
+counters, the top source addresses and the hold-time distribution:
+
+```
+tcptarpit statistics
+
+  currently held:
+    2 connection(s) from 86.54.31.44
+    1 connection(s) from 66.132.195.90
+
+  trapped:  103
+  gave up:  71
+  aborted:  29
+  kicked:   3
+
+  top sources:
+      41 85.217.140.41
+      12 167.94.146.54
+
+  hold times (seconds):
+    min: 1  median: 5  max: 515  n: 100
+
+  pf table <bruteforcers>: 37 entries
+```
+
+Log location and port are read from `/etc/tcptarpit.conf`;
+`tcptarpit_stat_log` in `rc.conf.local` overrides the log path. For
+ad-hoc analysis:
+
+```sh
+grep 'bot trapped' /var/log/tcptarpit.log | awk '{print $NF}' \
+    | sed 's/:[^:]*$//' | sort | uniq -c | sort -rn | head
 ```
 
 ## Behaviour and limits
@@ -436,7 +478,14 @@ gave up after 3 s).
 960 before the event loop ("[*] dropped privileges" log line, kernel
 proof via `ps -o uid,pledge`: 960/960, `stdio,inet`) and traps
 normally. Together with the rc.subr path (unprivileged from the
-first statement) both privilege models are now proven. No remaining
+first statement) both privilege models are now proven.
+
+**1.4.9 additions (verified on 8.0):** the rc.d `statistic` command
+shows live holds, counters, top sources and hold-time distribution
+(IPv6-safe); `max_per_source` default 100 holds 7/7 test connections
+without refusal, an explicit `max_per_source=3` refuses the 4th
+connection silently, and the slot is released on disconnect (verified
+on the same daemon instance). Full load suite passes. No remaining
 open items.
 
 ## Uninstall
