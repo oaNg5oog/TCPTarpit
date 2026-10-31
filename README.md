@@ -127,6 +127,21 @@ rcctl start  tcptarpit
 rcctl check  tcptarpit
 ```
 
+### Option C: prebuilt package
+
+`dist/tcptarpit-1.1.tgz` is the package built and verified on
+OpenBSD 8.0/amd64. pkg_add(1) can install it straight from the
+repository URL (locally built packages are unsigned, hence
+`-D unsigned`):
+
+```sh
+pkg_add -D unsigned \
+    https://github.com/oaNg5oog/TCPTarpit/raw/v1.1/dist/tcptarpit-1.1.tgz
+```
+
+Packages are specific to release and architecture - on anything but
+OpenBSD 8.0/amd64 build your own via the port (Option A).
+
 `rcctl enable` appends `tcptarpit` to `pkg_scripts` in `rc.conf.local`;
 at boot /etc/rc runs every `pkg_scripts` entry that is executable in
 `/etc/rc.d`. All daemon output goes to syslog at `daemon.info`, i.e.
@@ -324,7 +339,7 @@ from this repository: the `@newgroup`/`@newuser` PLIST directives create
 rc.d script into `/etc/rc.d`, and `@sample` installs
 `/etc/tcptarpit.conf` from the packaged sample without touching an
 existing configuration. `make package` builds an installable
-`tcptarpit-1.0.tgz`. See `Architektur.md` for details.
+`tcptarpit-1.0.tgz`. See `Architecture.md` for details.
 
 ## Verification status
 
@@ -336,7 +351,7 @@ with SIGHUP reopen after rotation, pid file write/remove on TERM, and
 privilege-drop guard cases (no-op as same user, abort when switching to
 another user without root, abort on unknown user). CPU cost of a 1 MB
 flood burst: ~0 s (the previous 1-byte-read variant needed ~11 s CPU per
-MB). See `Architektur.md` for the measurements.
+MB). See `Architecture.md` for the measurements.
 
 **Verified on OpenBSD 7.9 (amd64) test system:** complete package build
 via `/usr/ports/mystuff` + `make package`, `pkg_add -D unsigned`,
