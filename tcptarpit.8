@@ -79,9 +79,16 @@ An alternative configuration file can be given as the only argument.
 The following keys are recognized:
 .Bl -tag -width Ds
 .It Ic listen_ip
-Address to listen on.
+IPv4 address to listen on; an empty value disables the IPv4
+listener.
 Default:
 .Li 127.0.0.1 .
+.It Ic listen_ip6
+IPv6 address to listen on; an empty value disables the IPv6
+listener.
+By default both families are enabled.
+Default:
+.Li ::1 .
 .It Ic listen_port
 Port to listen on; must match the
 .Ic rdr-to
@@ -171,6 +178,13 @@ pass in on $ext_if proto tcp to any port ssh flags S/SA keep state \e
 pass in on $ext_if proto tcp to any port { http, https } \e
     flags S/SA keep state \e
     (max-src-conn-rate 30/10, overload <bruteforcers> flush global)
+
+# IPv6 (the daemon listens on ::1 as well by default)
+pass in quick on $ext_if inet6 proto tcp from <bruteforcers> \e
+    to ($ext_if) port { http, https } rdr-to ::1 port 8024
+pass in on $ext_if inet6 proto tcp to ($ext_if) port { http, https } \e
+    flags S/SA keep state \e
+    (max-src-conn-rate 30/10, overload <bruteforcers> flush)
 .Ed
 .Pp
 Inspect and edit the address list with
@@ -245,7 +259,15 @@ Optional log file (see
 .Xr spamd 8 ,
 .Xr syslogd 8
 .Sh CAVEATS
-Only IPv4 is supported.
+Each listening socket serves a single address family; both families
+are enabled by default and can be switched off individually via
+.Ic listen_ip
+and
+.Ic listen_ip6 .
+IPv6 traffic requires separate
+.Xr pf 4
+.Cm inet6
+rules redirecting to the IPv6 listen address.
 The number of simultaneously held connections is bounded by the process
 file descriptor limit.
 Because listing is based on connection rates, legitimate clients that

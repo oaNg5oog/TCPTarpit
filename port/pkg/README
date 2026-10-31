@@ -30,7 +30,10 @@ Post-installation steps.
    Then reload with: pfctl -f /etc/pf.conf
 
 4. Optional: configuration in /etc/tcptarpit.conf (listen_port,
-   max_age, log_file, pid_file, ...).  See tcptarpit(8).
+   max_age, log_file, pid_file, ...).  IPv4 and IPv6 listeners are
+   both on by default (127.0.0.1 and ::1) and individually
+   switchable; IPv6 traffic needs the inet6 pf rules shown in
+   tcptarpit(8).
 
 5. Managing caught addresses:
 

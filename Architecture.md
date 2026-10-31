@@ -209,6 +209,22 @@ sends that signal to the pid listed in `pid_file`:
 `SIGPIPE` is ignored so a broken syslog pipe cannot kill the daemon;
 `SIGTERM`/`SIGINT` remove the pid file and exit.
 
+## Socket layer and address families
+
+Since 1.3.0 the daemon uses IO::Socket::IP from the OpenBSD base
+perl (dual-stack capable) instead of IO::Socket::INET (IPv4 only).
+Design:
+
+* one listening socket per enabled family - `listen_ip` (IPv4,
+  default 127.0.0.1) and `listen_ip6` (IPv6, default ::1); an empty
+  value switches that family off, at least one address must remain
+  (fail-fast otherwise). Both default ON.
+* each pf address family needs its own rules: rdr-to 127.0.0.1 for
+  inet, rdr-to ::1 for inet6; the <bruteforcers> table holds both
+  address types.
+* peerhost() logs the family's notation (::1 style for v6).
+* pledge "inet" covers both families; unveil is unaffected.
+
 ## Login class and fd budget
 
 Every held connection costs the daemon one file descriptor. OpenBSD's
@@ -391,6 +407,14 @@ rebuilding after a release upgrade.
   baseline (7 fds). Without the class the daemon caps at ~125
   connections (default 128 fd soft limit) but stays alive and
   recovers - no crash, no leak.
+
+* IPv6 (1.3.0): default dual-stack listeners verified on the
+  development machine (v4 and v6 connections trapped and held
+  silently, ::1 in the log) and on the OpenBSD 8.0 test system on
+  ::1; v6-only and "both empty" fail-fast cases verified. External
+  IPv6 traffic through pf could NOT be tested - the test VM has no
+  global IPv6 address on vio0; the inet6 pf rules are documented
+  accordingly.
 
 Still open:
 

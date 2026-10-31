@@ -12,7 +12,7 @@
 
 use strict;
 use warnings;
-use IO::Socket::INET;
+use IO::Socket::IP;
 use IO::Select;
 use IO::Handle;
 use POSIX qw(setgid setuid);
@@ -23,7 +23,8 @@ $| = 1;    # autoflush on stdout, output is piped to syslog via daemon(8) -l
 # Configuration: /etc/tcptarpit.conf overrides these defaults.
 my $config_file = shift(@ARGV) // '/etc/tcptarpit.conf';
 my %config = (
-    listen_ip        => '127.0.0.1',
+    listen_ip        => '127.0.0.1',  # IPv4 address, empty = IPv4 off
+    listen_ip6       => '::1',        # IPv6 address, empty = IPv6 off
     listen_port      => 8024,
     cleanup_interval => 1800,    # seconds between cleanup passes
     max_age          => 1800,    # seconds before a connection is closed
@@ -82,10 +83,23 @@ sub read_config {
 sub validate_config {
     my ($cfg) = @_;
 
-    my @octets = split /\./, $cfg->{listen_ip};
-    (@octets == 4
-        && !grep { $_ !~ /^\d{1,3}$/ || $_ > 255 } @octets)
-        or die "invalid listen_ip \"$cfg->{listen_ip}\"\n";
+    my $v4 = length $cfg->{listen_ip};
+    my $v6 = length $cfg->{listen_ip6};
+    ($v4 || $v6)
+        or die "no listen address: set listen_ip (IPv4) and/or listen_ip6 (IPv6)\n";
+
+    if ($v4) {
+        my @octets = split /\./, $cfg->{listen_ip};
+        (@octets == 4
+            && !grep { $_ !~ /^\d{1,3}$/ || $_ > 255 } @octets)
+            or die "invalid listen_ip \"$cfg->{listen_ip}\"\n";
+    }
+    if ($v6) {
+        # loose literal check; the definitive validation is the bind
+        # itself, which fails fast with a clear error
+        $cfg->{listen_ip6} =~ /^[0-9A-Fa-f:.]+(%[A-Za-z0-9]+)?$/
+            or die "invalid listen_ip6 \"$cfg->{listen_ip6}\"\n";
+    }
 
     $cfg->{listen_port} =~ /^\d+$/
         && $cfg->{listen_port} >= 1
@@ -255,14 +269,29 @@ $SIG{PIPE} = 'IGNORE';    # a broken syslog pipe must not kill the daemon
 
 open_log($config{log_file});
 
-# main listening socket
-my $server = IO::Socket::INET->new(
-    LocalAddr => $config{listen_ip},
-    LocalPort => $config{listen_port},
-    Proto     => 'tcp',
-    Listen    => SOMAXCONN,
-    ReuseAddr => 1
-    ) or die "cannot create socket: $!\n";
+# listening sockets: one per enabled address family (IPv4 and/or
+# IPv6), each individually switchable through listen_ip / listen_ip6
+my @servers;
+if (length $config{listen_ip}) {
+    my $s = IO::Socket::IP->new(
+        LocalAddr => $config{listen_ip},
+        LocalPort => $config{listen_port},
+        Proto     => 'tcp',
+        Listen    => SOMAXCONN,
+        ReuseAddr => 1
+        ) or die "cannot create IPv4 socket on $config{listen_ip}:$config{listen_port}: $!\n";
+    push @servers, $s;
+}
+if (length $config{listen_ip6}) {
+    my $s = IO::Socket::IP->new(
+        LocalAddr => $config{listen_ip6},
+        LocalPort => $config{listen_port},
+        Proto     => 'tcp',
+        Listen    => SOMAXCONN,
+        ReuseAddr => 1,
+        ) or die "cannot create IPv6 socket on $config{listen_ip6}:$config{listen_port}: $!\n";
+    push @servers, $s;
+}
 
 write_pidfile($config{pid_file});
 drop_privileges($config{user}, $config{group});
@@ -273,10 +302,11 @@ if ($has_pledge or $has_unveil) {
     logmsg("[*] pledge/unveil unavailable (not OpenBSD?), running without\n");
 }
 
-logmsg("generic layer-4 TCP tarpit running on $config{listen_ip}:$config{listen_port}"
+logmsg("generic layer-4 TCP tarpit running on "
+    . join(' ', map { $_->sockhost . ':' . $_->sockport } @servers)
     . " (config: $config_file, uid=$<)\n");
 
-my $selector = IO::Select->new($server);
+my $selector = IO::Select->new(@servers);
 my %connections;
 my $last_cleanup = time();
 
@@ -285,9 +315,9 @@ while (1) {
     my @ready = $selector->can_read(10);
 
     foreach my $fh (@ready) {
-        if ($fh == $server) {
-            # new connection
-            my $client = $server->accept();
+        if (grep { $fh == $_ } @servers) {
+            # new connection on one of the listening sockets
+            my $client = $fh->accept();
             if ($client) {
                 my $ip   = $client->peerhost();
                 my $port = $client->peerport();

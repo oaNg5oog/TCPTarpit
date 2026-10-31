@@ -1,6 +1,6 @@
 COMMENT=	generic layer-4 TCP tarpit for abusive clients
 
-V=		1.2.1
+V=		1.3.0
 DISTNAME=	tcptarpit-${V}
 CATEGORIES=	net security
 

@@ -1,5 +1,15 @@
 tcptarpit - change history
 
+1.3.0 (2026-10-31)
+- IPv6 support: the socket layer moved from IO::Socket::INET to
+  IO::Socket::IP (part of the OpenBSD base perl). IPv4 and IPv6 are
+  both enabled by default (127.0.0.1 and ::1) and each family is
+  switched off individually by leaving listen_ip or listen_ip6 empty;
+  at least one address must remain. Peer addresses are logged in
+  their family's notation. pf needs separate inet6 rules with
+  rdr-to ::1 (documented with examples). The load test gained a
+  v6_probe phase and runs over IO::Socket::IP as well.
+
 1.2.1 (2026-10-31)
 - pkg-readme: the package installs the post-installation guide as
   /usr/local/share/doc/pkg-readmes/tcptarpit (the OpenBSD convention

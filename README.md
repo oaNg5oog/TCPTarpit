@@ -131,14 +131,14 @@ rcctl check  tcptarpit
 
 ### Option C: prebuilt package
 
-`dist/tcptarpit-1.2.1.tgz` is the package built and verified on
+`dist/tcptarpit-1.3.0.tgz` is the package built and verified on
 OpenBSD 8.0/amd64. pkg_add(1) can install it straight from the
 repository URL (locally built packages are unsigned, hence
 `-D unsigned`):
 
 ```sh
 pkg_add -D unsigned \
-    https://github.com/oaNg5oog/TCPTarpit/raw/v1.2.1/dist/tcptarpit-1.2.1.tgz
+    https://github.com/oaNg5oog/TCPTarpit/raw/v1.3.0/dist/tcptarpit-1.3.0.tgz
 ```
 
 After installation pkg_add shows the post-installation guide; it
@@ -161,8 +161,9 @@ message, following the fail-fast convention of OpenBSD daemons.
 
 | Key                | Default     | Meaning                                          |
 |--------------------|-------------|--------------------------------------------------|
-| `listen_ip`        | `127.0.0.1` | listen address; loopback keeps the tarpit unreachable without pf |
-| `listen_port`      | `8024`      | listen port; must match the `rdr-to` rule in pf.conf |
+| `listen_ip`        | `127.0.0.1` | IPv4 listen address; empty string disables the IPv4 listener |
+| `listen_ip6`       | `::1`       | IPv6 listen address; empty string disables the IPv6 listener |
+| `listen_port`      | `8024`      | listen port; must match the `rdr-to` rules in pf.conf |
 | `cleanup_interval` | `1800`      | seconds between cleanup passes over stale connections |
 | `max_age`          | `1800`      | seconds before a held connection is closed with FIN |
 | `log_file`         | *(empty)*   | empty = stdout (syslog via daemon(8)); or an absolute path for file logging |
@@ -293,6 +294,13 @@ pass in on $ext_if proto tcp to any port ssh flags S/SA keep state \
 # Webserver watch: protection against fast HTTP scanners / dir busters.
 pass in on $ext_if proto tcp to any port { http, https } flags S/SA keep state \
     (max-src-conn-rate 30/10, overload <bruteforcers> flush global)
+
+# IPv6 (default daemon listens on ::1 as well; separate rules):
+#pass in quick on $ext_if inet6 proto tcp from <bruteforcers> \
+#    to ($ext_if) port { http, https } rdr-to ::1 port 8024
+#pass in on $ext_if inet6 proto tcp to ($ext_if) port { http, https } \
+#    flags S/SA keep state \
+#    (max-src-conn-rate 30/10, overload <bruteforcers> flush)
 ```
 
 Rule order matters: the tarpit `pass in quick ... rdr-to` rule must appear
@@ -341,7 +349,10 @@ pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
   pass, i.e. effectively between `max_age` and
   `max_age + cleanup_interval` seconds (defaults: 30-60 minutes). Closing
   sends a normal FIN.
-* IPv4 only (`IO::Socket::INET`), listener on `127.0.0.1:8024` by default.
+* IPv4 and IPv6 are both enabled by default (127.0.0.1 and ::1); each
+  family is switched off individually by leaving `listen_ip` or
+  `listen_ip6` empty. IPv6 traffic needs separate `inet6` pf rules with
+  `rdr-to ::1`.
 * One process, one single-threaded event loop (`IO::Select`). Per
   connection cost: one file descriptor plus a small hash entry. The number
   of simultaneously held connections is bounded by the process fd limit.

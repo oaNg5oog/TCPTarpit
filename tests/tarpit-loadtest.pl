@@ -29,15 +29,17 @@
 
 use strict;
 use warnings;
-use IO::Socket::INET;
+use IO::Socket::IP;
 use IO::Select;
 use Socket qw(SOL_SOCKET SO_LINGER);
 use Getopt::Long;
 
 my $host = '127.0.0.1';
+my $host6 = '::1';
 my $port = 8024;
-GetOptions('host=s' => \$host, 'port=i' => \$port)
-    or die "usage: $0 [--host 127.0.0.1] [--port 8024]\n";
+GetOptions('host=s' => \$host, 'host6=s' => \$host6, 'port=i' => \$port)
+    or die "usage: $0 [--host 127.0.0.1] [--host6 ::1] [--port 8024]\n";
+# --host6 '' disables the IPv6 phase
 
 my %limits = (          # acceptable CPU seconds per phase
     idle_flood   => 2,
@@ -79,7 +81,7 @@ sub stats {
 }
 
 sub connect_one {
-    my $s = IO::Socket::INET->new(
+    my $s = IO::Socket::IP->new(
         PeerAddr => $host, PeerPort => $port,
         Proto    => 'tcp', Timeout  => 5
     );
@@ -269,6 +271,26 @@ my (@idle, $t0, $s1);
     $detail .= sprintf(', fds=%d (baseline %d)', $st->{fds}, $base->{fds})
         if $st && $base && defined $st->{fds} && defined $base->{fds};
     verdict('recovery', $works && $recovered && daemon_alive(), $detail);
+}
+
+# ---------------------------------------------------------------- v6 probe
+if (length $host6) {
+    my $s = IO::Socket::IP->new(
+        PeerAddr => $host6, PeerPort => $port,
+        Proto    => 'tcp', Timeout  => 3
+    );
+    if (!$s) {
+        printf "SKIP %-12s IPv6 %s unreachable: %s\n", 'v6_probe', $host6, $!;
+    }
+    else {
+        syswrite($s, 'x');
+        my $sel = IO::Select->new($s);
+        my $answered = $sel->can_read(2) ? 1 : 0;
+        close $s;
+        verdict('v6_probe', !$answered,
+            $answered ? 'daemon answered on IPv6 (must stay silent)'
+                      : "silent on IPv6 ($host6), connection held");
+    }
 }
 
 print "\n== summary: " . (@fails ? 'FAIL (' . join(', ', @fails) . ')'
