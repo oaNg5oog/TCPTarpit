@@ -245,9 +245,15 @@ sub apply_pledge {
     return unless $has_pledge;
 
     my @promises = qw(inet);
-    push @promises, qw(wpath cpath) if length $config{log_file};
-    push @promises, 'cpath'
-        if length $config{pid_file} && !length $config{log_file};
+    # wpath/cpath: (re)opening the log file after rotation.  cpath and
+    # rpath for the pid file: perl's unlink() lstat()s the file first
+    # (verified with ktrace on OpenBSD 8.0), which pledge flags as
+    # "rpath" - without it every SIGTERM/SIGINT ended in a pledge
+    # abort instead of a clean shutdown.  unveil limits the readable
+    # and writable paths to the log file and the pid directory anyway.
+    push @promises, 'wpath' if length $config{log_file};
+    push @promises, 'cpath' if length $config{log_file} || length $config{pid_file};
+    push @promises, 'rpath' if length $config{pid_file};
 
     OpenBSD::Pledge::pledge(@promises)
         or die "pledge(@promises) failed: $!\n";
