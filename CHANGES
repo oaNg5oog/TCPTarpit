@@ -1,5 +1,16 @@
 tcptarpit - change history
 
+1.4.3 (2026-10-31)
+- fix fresh-install failure found on a production machine: @newuser
+  referenced the tcptarpit login class, but pkg_add runs @newuser
+  before any file is extracted - the class file from @sample does
+  not exist yet, so useradd failed ("No such login class"), the
+  _tcptarpit user was never created and the run directory and log
+  file @execs failed as well. @newuser now creates the user without
+  a class; the existing usermod @exec assigns the class after
+  cap_mkdb has registered it. Test systems with a pre-existing user
+  never triggered this.
+
 1.4.2 (2026-10-31)
 - production hardening from the final pre-deployment audit, three
   edge-case defects fixed:

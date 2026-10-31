@@ -1,7 +1,11 @@
 @comment uid/gid 960 chosen locally, above the OpenBSD ports registry
 @comment range (registry ends below 910); change both numbers on collision.
+@comment the login class is assigned AFTER creation via usermod below:
+@comment @newuser runs before any file is extracted, so the class file
+@comment installed by @sample does not exist yet at that point (found on
+@comment a fresh production install: "useradd: No such login class").
 @newgroup _tcptarpit:960
-@newuser _tcptarpit:960:960:tcptarpit:tcptarpit daemon:/nonexistent:/sbin/nologin
+@newuser _tcptarpit:960:960::tcptarpit daemon:/nonexistent:/sbin/nologin
 @rcscript ${RCDIR}/tcptarpit
 bin/tcptarpit.pl
 @man man/man8/tcptarpit.8
