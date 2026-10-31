@@ -19,7 +19,7 @@ use IO::Socket::IP;
 use IO::Select;
 use IO::Handle;
 use POSIX qw(setgid setuid);
-use Errno qw(EAGAIN EWOULDBLOCK EINTR);
+use Errno qw(EAGAIN EWOULDBLOCK EINTR ECONNABORTED EMFILE ENFILE);
 use File::Basename qw(dirname);
 
 $| = 1;    # autoflush on stdout, output is piped to syslog via daemon(8) -l
@@ -403,8 +403,14 @@ while (1) {
                     sent_bytes   => 0,
                 };
             } else {
-                # accept failed (usually EMFILE at the fd limit): the
-                # listening socket stays readable while connections
+                # ECONNABORTED is expected under connection churn: the
+                # peer reset during the handshake, the kernel dropped
+                # the queued connection - just skip it (found on the
+                # 8.0 test system: pacing this error throttled accept
+                # until client connects timed out).
+                next if $! == ECONNABORTED;
+                # a real accept failure (EMFILE/ENFILE at the fd limit)
+                # keeps the listening socket readable while connections
                 # keep arriving, which would spin the loop at full CPU.
                 # Log once and pace the retry.
                 if (!$accept_err_logged) {
@@ -450,6 +456,9 @@ while (1) {
             }
         }
     }
+
+    # reset the accept-error latch once connections succeed again
+    $accept_err_logged = 0 if $accepted;
 
     # stutter pass: dribble one byte per connection per interval, like
     # spamd(8).  Client sockets are non-blocking, so a full send buffer

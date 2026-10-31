@@ -337,8 +337,11 @@ pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
 
 * Held connections receive one filler byte per `stutter` seconds
   (default 1, spamd-style) - never a real response. `stutter=0`
-  switches to complete silence. The dribble is capped at 32 KiB per
-  connection so the send buffer can never fill and block the daemon.
+  switches to complete silence. Client sockets are non-blocking: a
+  peer that never reads suspends its dribble (EAGAIN) instead of
+  blocking the daemon, and the total dribble per connection is capped
+  at 32 KiB as a second guard. accept() failures at the fd limit are
+  logged once and paced - no CPU spins under connection floods.
 * Idle connections are closed after `max_age` seconds at the next
   cleanup pass (effectively between `max_age` and
   `max_age + cleanup_interval`, defaults 30-60 minutes), with a normal
@@ -398,6 +401,14 @@ Runtime-verified on a development machine (Linux, perl 5.36) and on
   table entry restores normal service immediately. Operational note:
   the rate limits count connections with a completed TCP handshake -
   SYN-only bursts against a closed port do not trigger the overload.
+
+**Final pre-deployment audit (1.4.2):** the complete daemon code was
+re-read end to end before the production release; three edge-case
+defects were found and fixed (stale stutter deadline busy-looping the
+select with capped connections and large `max_age`; blocking stutter
+writes freezing the event loop on full send buffers; unlogged
+accept() CPU spin at the fd limit). Full suite passes against the
+hardened daemon locally and on OpenBSD 8.0.
 
 **Still open:** IPv6 traffic through pf with a global IPv6 address
 (the test VM has none - the inet6 rules are documented but untested

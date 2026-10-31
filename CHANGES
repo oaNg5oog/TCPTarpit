@@ -15,6 +15,9 @@ tcptarpit - change history
   * accept spin: at the fd limit with connections still arriving, the
     readable listening socket caused an unlogged full-CPU loop;
     accept failures are now logged once and paced at 10 retries/s
+    (EMFILE/ENFILE only - ECONNABORTED from handshake races under
+    churn is expected and skipped silently; found on the test system
+    where pacing it throttled accept until client connects timed out)
 
 1.4.1 (2026-10-31)
 - documentation overhaul: README brought up to the state of 1.4.0
