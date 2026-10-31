@@ -128,18 +128,23 @@ disables stuttering for pure silence.
 Default:
 .Li 1 .
 .It Ic log_file
-Log into this file instead of stdout.
-Empty (the default) logs to stdout, which
+Log into this file (the default since 1.4.0; the package creates it
+with suitable ownership and registers newsyslog rotation). An empty
+value logs to stdout instead, which
 .Xr daemon 8
 pipes to
 .Xr syslogd 8
 at
 .Dq daemon.info .
+Default:
+.Li /var/log/tcptarpit.log .
 .It Ic pid_file
 Write the process id to this file on startup and remove it on exit.
 Used by
 .Xr newsyslog 8
 to signal the daemon after log rotation.
+Default:
+.Li /var/run/tcptarpit/tcptarpit.pid .
 .It Ic user
 Drop privileges to this user after the listen socket, log file and pid
 file have been opened.
@@ -257,8 +262,13 @@ The daemon itself.
 .Xr rc.d 8
 control script.
 .It Pa /var/log/tcptarpit.log
-Optional log file (see
-.Ic log_file ) .
+Default log file (see
+.Ic log_file ) ;
+rotation is registered in
+.Pa /etc/newsyslog.conf
+by the package.
+.It Pa /var/run/tcptarpit/tcptarpit.pid
+Default pid file.
 .El
 .Sh SEE ALSO
 .Xr pledge 2 ,

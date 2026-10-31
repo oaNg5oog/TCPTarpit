@@ -169,8 +169,8 @@ message, following the fail-fast convention of OpenBSD daemons.
 | `cleanup_interval` | `1800`      | seconds between cleanup passes over stale connections |
 | `max_age`          | `1800`      | seconds before a held connection is closed with FIN |
 | `stutter`         | `1`        | seconds per dribbled filler byte (spamd-style stutter); `0` = pure silence |
-| `log_file`         | *(empty)*   | empty = stdout (syslog via daemon(8)); or an absolute path for file logging |
-| `pid_file`         | *(empty)*   | optional pid file, e.g. `/var/run/tcptarpit/tcptarpit.pid` |
+| `log_file`         | `/var/log/tcptarpit.log` | empty = stdout (syslog via daemon(8)) |
+| `pid_file`         | `/var/run/tcptarpit/tcptarpit.pid` | empty = no pid file |
 | `user`             | *(empty)*   | drop privileges to this user after startup (see below) |
 | `group`            | *(empty)*   | drop group; empty = primary group of `user` |
 
@@ -185,27 +185,32 @@ rcctl set tcptarpit flags "/usr/local/bin/tcptarpit.pl /etc/tcptarpit-test.conf"
 
 ## Logging
 
-By default everything is logged to stdout, which daemon(8) pipes to
-syslog at `daemon.info` (`/var/log/daemon`).
+Since 1.4.0 the default is a dedicated log file,
+`/var/log/tcptarpit.log` - the syslog route (`/var/log/daemon`)
+stays clean that way. The package prepares everything automatically:
 
-For a dedicated log file set `log_file=/var/log/tcptarpit.log`. The file
-must exist and be writable by the daemon user:
+* creates `/var/log/tcptarpit.log` owned by `_tcptarpit` (0640)
+* creates `/var/run/tcptarpit/` for the pid file
+* appends an idempotent rotation entry to `/etc/newsyslog.conf`
+  (`640 7 250 * Z`, signaling the pid file)
+
+On SIGHUP - sent by newsyslog(8) after rotation - the daemon reopens
+its log file. Verify by hand:
 
 ```sh
+mv /var/log/tcptarpit.log /var/log/tcptarpit.log.0
+kill -HUP $(cat /var/run/tcptarpit/tcptarpit.pid)
+```
+
+Setting `log_file` empty switches back to stdout, which daemon(8)
+pipes to syslog at `daemon.info`. Manual installations (Option B)
+create the file and the rotation entry themselves:
+
+```sh
+install -d -o _tcptarpit -g _tcptarpit /var/run/tcptarpit
 install -o _tcptarpit -g _tcptarpit -m 0640 /dev/null /var/log/tcptarpit.log
+echo '/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid' >> /etc/newsyslog.conf
 ```
-
-Rotation through newsyslog(8): the daemon reopens its log file on
-SIGHUP, and newsyslog signals the pid file given in the last column:
-
-```sh
-mkdir -p /var/run/tcptarpit && chown _tcptarpit /var/run/tcptarpit
-# /etc/newsyslog.conf:
-/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
-```
-
-With `pid_file` set, the daemon writes its process id at startup and
-removes the file on exit.
 
 ## Running unprivileged
 

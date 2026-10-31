@@ -18,3 +18,8 @@ share/examples/tcptarpit/tcptarpit.conf
 @exec [ -f ${SYSCONFDIR}/login.conf.d/tcptarpit ] && cap_mkdb ${SYSCONFDIR}/login.conf.d/tcptarpit
 @exec id _tcptarpit >/dev/null 2>&1 && usermod -L tcptarpit _tcptarpit || true
 @sample ${SYSCONFDIR}/tcptarpit.conf
+@comment runtime dirs and log file for the default file logging
+@exec [ -d /var/run/tcptarpit ] || install -d -o _tcptarpit -g _tcptarpit /var/run/tcptarpit
+@exec [ -f /var/log/tcptarpit.log ] || install -o _tcptarpit -g _tcptarpit -m 0640 /dev/null /var/log/tcptarpit.log
+@comment newsyslog rotation entry (idempotent, editable by the admin)
+@exec grep -q tcptarpit.log /etc/newsyslog.conf || printf '# tcptarpit - added by the package, adjust to your needs\n/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid\n' >> /etc/newsyslog.conf

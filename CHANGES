@@ -1,5 +1,17 @@
 tcptarpit - change history
 
+1.4.0 (2026-10-31)
+- file logging is now the default: log_file defaults to
+  /var/log/tcptarpit.log and pid_file to
+  /var/run/tcptarpit/tcptarpit.pid, keeping /var/log/daemon free of
+  tarpit messages. The package creates the log file (owned by
+  _tcptarpit, 0640) and the run directory, and appends an idempotent
+  newsyslog(8) rotation entry to /etc/newsyslog.conf (newsyslog has
+  no include directory, so a marked block is appended and stays
+  editable). SIGHUP reopens the log after rotation, signaled via the
+  pid file. Empty log_file restores the previous stdout/syslog
+  behaviour.
+
 1.3.0 (2026-10-31)
 - stutter mode like spamd(8): by default one filler byte is dribbled
   back per connection per second, so trapped clients keep waiting for

@@ -186,25 +186,26 @@ check/stop/restart find the process (verified).
 
 ## Logging
 
-Two modes, selected by the `log_file` configuration key:
+Since 1.4.0 the default is file logging; the modes, selected by
+`log_file`:
 
-1. **Default (empty `log_file`):** every message goes to stdout, which
+1. **Default (`log_file=/var/log/tcptarpit.log`):** all messages are
+   appended to that file; stdout stays empty, so `/var/log/daemon`
+   remains clean of tarpit noise. The package creates the file
+   (owned by `_tcptarpit`, 0640), the run directory for the pid file
+   and an idempotent rotation entry in `/etc/newsyslog.conf`
+   (newsyslog(8) has no include directory on OpenBSD 8.0, so the
+   package appends a marked block instead).
+2. **Empty `log_file`:** every message goes to stdout, which
    daemon(8) pipes to syslogd(8) at `daemon.info` -> `/var/log/daemon`.
-2. **File mode (`log_file=/var/log/tcptarpit.log`):** all messages are
-   appended to that file; stdout stays empty. The file is opened in
-   append mode with autoflush before privileges are dropped, so root
-   only needs to create it once with the right ownership.
 
 All messages go through a single `logmsg()` function - there is no
 direct `print` outside it (config errors on stderr are the exception:
 they occur before logging is initialized).
 
 Rotation: on SIGHUP the daemon reopens the log file. newsyslog(8)
-sends that signal to the pid listed in `pid_file`:
-
-```sh
-/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
-```
+sends that signal to the pid listed in `pid_file`
+(`/var/run/tcptarpit/tcptarpit.pid` by default since 1.4.0).
 
 `SIGPIPE` is ignored so a broken syslog pipe cannot kill the daemon;
 `SIGTERM`/`SIGINT` remove the pid file and exit.

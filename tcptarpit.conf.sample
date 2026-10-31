@@ -31,16 +31,17 @@
 # the send buffer can never fill up.
 #stutter=1
 
-# Log file.  Empty logs to stdout, which daemon(8) pipes to syslog
-# (daemon.info -> /var/log/daemon).  Set to log into a dedicated file
-# instead; see the newsyslog(8) example in tcptarpit(8) for rotation.
-# The file must be writable by the daemon user.
-#log_file=
+# Log file - the default since 1.4.0.  The package creates it with
+# suitable ownership and registers newsyslog(8) rotation; on SIGHUP
+# (sent by newsyslog after rotation) the daemon reopens the file.
+# Empty value logs to stdout instead, which daemon(8) pipes to
+# syslog (daemon.info -> /var/log/daemon).
+#log_file=/var/log/tcptarpit.log
 
-# PID file, used by newsyslog(8) to signal the daemon after log
-# rotation.  When dropping privileges, use a directory writable by
-# the daemon user, e.g. /var/run/tcptarpit/tcptarpit.pid.
-#pid_file=
+# PID file - the default since 1.4.0.  Used by newsyslog(8) to
+# signal the daemon after log rotation; the package creates the
+# directory with the daemon user's ownership.
+#pid_file=/var/run/tcptarpit/tcptarpit.pid
 
 # Privilege drop: switch to this user (and group) after the listen
 # socket, log file and pid file are opened.  Empty = no drop.  If the

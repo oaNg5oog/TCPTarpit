@@ -12,8 +12,9 @@ Post-installation steps.
        rcctl enable tcptarpit
        rcctl start tcptarpit
 
-   It listens on 127.0.0.1:8024 only and logs to /var/log/daemon
-   (facility daemon.info).
+   It listens on 127.0.0.1 and ::1 (port 8024) and logs to
+   /var/log/tcptarpit.log (created and rotated via newsyslog(8)
+   automatically; /var/log/daemon stays clean).
 
 3. pf(4) integration - without pf rules no traffic reaches the
    tarpit.  Minimal /etc/pf.conf (adjust ext_if and ports):
