@@ -410,11 +410,17 @@ writes freezing the event loop on full send buffers; unlogged
 accept() CPU spin at the fd limit). Full suite passes against the
 hardened daemon locally and on OpenBSD 8.0.
 
+**First production deployment (1.4.6):** install, upgrade and restart
+verified under real traffic; internet scanners are trapped
+continuously with hold durations up to 8 min 35 s, and a complete
+newsyslog(8) rotation cycle ran live ("logfile turned over" ->
+SIGHUP via the pid file -> "log file reopened after rotation",
+logging continued without a gap).
+
 **Still open:** IPv6 traffic through pf with a global IPv6 address
 (the test VM has none - the inet6 rules are documented but untested
-with real traffic), newsyslog(8) rotation over long production
-timeframes, and the in-daemon `setuid` branch (the package path runs
-unprivileged from the start).
+with real traffic) and the in-daemon `setuid` branch (the package
+path runs unprivileged from the start).
 
 ## Uninstall
 
