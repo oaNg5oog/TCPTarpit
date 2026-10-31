@@ -10,9 +10,14 @@ perl tests/tarpit-loadtest.pl                # against 127.0.0.1:8024
 perl tests/tarpit-loadtest.pl --host H --port P
 ```
 
-Core perl only (IO::Socket::INET, IO::Select), no dependencies. Exit
+Core perl only (IO::Socket::IP, IO::Select), no dependencies. Exit
 code 0 = all phases passed, 1 otherwise, so it can run as a smoke test
 after deployment.
+
+Note: the idle_flood and fd_pressure phases open hundreds of
+connections from ONE source and therefore need the per-source cap
+lifted for the run: append `max_per_source=0` to /etc/tcptarpit.conf,
+restart, run the suite, remove the line again.
 
 | Phase | What it does | What it proves |
 |---|---|---|
