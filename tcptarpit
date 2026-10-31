@@ -1,0 +1,22 @@
+#!/bin/ksh
+
+# Der Pfad zu unserem Perl-Skript
+daemon="/usr/local/bin/tcptarpit.pl"
+
+# Definiert die Syslog-Facility und Priorität für die Ausgaben
+daemon_logger="daemon.info"
+
+# Wir nutzen das OpenBSD-Hilfstool 'daemon', um das Skript im Hintergrund zu starten
+daemon_flags=""
+
+. /etc/rc.d/rc.subr
+
+# Da es sich um ein interpretiertes Skript handelt, müssen wir pexp anpassen,
+# damit rc.subr den Prozess anhand des Namens in der Prozessliste wiederfindet.
+pexp="perl ${daemon}${daemon_flags:+ ${daemon_flags}}"
+
+rc_reload=NO
+rc_bg=YES
+
+rc_cmd $1
+
