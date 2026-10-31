@@ -5,6 +5,8 @@
 @rcscript ${RCDIR}/tcptarpit
 bin/tcptarpit.pl
 @man man/man8/tcptarpit.8
+share/doc/tcptarpit/
+share/doc/tcptarpit/CHANGES
 share/examples/tcptarpit/
 share/examples/tcptarpit/tcptarpit.conf
 @sample ${SYSCONFDIR}/tcptarpit.conf

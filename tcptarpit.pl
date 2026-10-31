@@ -227,6 +227,26 @@ sub apply_pledge {
     logmsg("[*] pledged to: stdio @promises\n");
 }
 
+# Format a duration in seconds with the two most significant units
+# (e.g. "45 s", "1 min 20 s", "2 h 5 min", "3 d 4 h"), so the log shows
+# how long bots actually endure the tarpit.
+sub fmt_duration {
+    my ($s) = @_;
+    return "$s s" if $s < 60;
+
+    my @parts;
+    my @units = ([86400, 'd'], [3600, 'h'], [60, 'min']);
+    for my $u (@units) {
+        last if @parts >= 2;
+        if ($s >= $u->[0]) {
+            push @parts, sprintf("%d %s", int($s / $u->[0]), $u->[1]);
+            $s %= $u->[0];
+        }
+    }
+    push @parts, "$s s" if @parts < 2 && $s > 0;
+    return join(' ', @parts);
+}
+
 END { remove_pidfile() }
 $SIG{HUP}  = \&reopen_log;
 $SIG{TERM} = sub { remove_pidfile(); exit 0 };
@@ -309,11 +329,13 @@ while (1) {
                 #   undef = socket error, usually an RST
                 # Daemon-side timeouts are logged by the cleanup pass
                 # ("kicking bot ... hold time"), never here.
-                my $ip = $connections{$fh}->{ip};
+                my $rec  = $connections{$fh};
+                my $ip   = $rec->{ip};
+                my $held = fmt_duration(time() - $rec->{start_time});
                 if (defined $res) {
-                    logmsg("[-] bot gave up: $ip\n");
+                    logmsg("[-] bot gave up after $held: $ip\n");
                 } else {
-                    logmsg("[-] bot aborted: $ip ($!)\n");
+                    logmsg("[-] bot aborted after $held: $ip ($!)\n");
                 }
                 $selector->remove($fh);
                 delete $connections{$fh};
@@ -328,8 +350,8 @@ while (1) {
         logmsg("[*] starting periodic cleanup of stale connections\n");
         while (my ($key, $data) = each %connections) {
             if ($now - $data->{start_time} >= $config{max_age}) {
-                logmsg(sprintf("[*] kicking bot after %d s hold time: %s:%s\n",
-                    $config{max_age}, $data->{ip}, $data->{port}));
+                logmsg(sprintf("[*] kicking bot after %s hold time: %s:%s\n",
+                    fmt_duration($config{max_age}), $data->{ip}, $data->{port}));
                 # each() yields stringified keys, so remove/close must
                 # go through the handle stored in the record
                 my $sock = $data->{fh};

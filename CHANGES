@@ -1,0 +1,38 @@
+tcptarpit - change history
+
+1.1 (2026-10-31)
+- log how long a bot endured the tarpit: the "gave up" and "aborted"
+  messages now include a readable duration (e.g. "1 min 20 s"); the
+  hold-time kick message uses the same format
+- rc.d(8) script: run the interpreter as daemon and the script as
+  daemon_flags. OpenBSD 7.9's rc.subr rebuilds pexp from daemon +
+  daemon_flags (custom pexp values are overwritten), so check, stop
+  and restart now actually match the running process
+- port: DISTFILES= (empty) is the correct knob for the distfile-less
+  build; uid/gid 960 must be registered in
+  /usr/ports/infrastructure/db/user.list for @newuser/@newgroup
+- port: install this file as share/doc/tcptarpit/CHANGES
+
+1.0 (2026-10-31)
+- initial release: generic layer-4 TCP tarpit behind pf rdr-to,
+  protocol agnostic, never sends a single byte back
+- fix fd leak in the cleanup pass: each() yields stringified hash
+  keys, so close() and IO::Select::remove() on them silently failed;
+  the real handle is now stored in the connection record and kicked
+  connections really receive a FIN
+- drain sockets in 64 KiB chunks instead of 1 byte per readable event
+  (1 MB flood cost ~11 s CPU before, ~0 s after)
+- distinguish client FIN, client RST and daemon-side hold-time
+  timeout in the log; connections reset before accept() completes are
+  dropped without registration
+- /etc/tcptarpit.conf with sane built-in defaults and fail-fast
+  validation: listen_ip, listen_port, cleanup_interval, max_age,
+  log_file, pid_file, user, group
+- optional file logging with SIGHUP reopen for newsyslog(8) rotation
+  and a pid file for signaling
+- privilege drop via user/group keys; rc script runs the daemon as
+  the unprivileged _tcptarpit user created automatically by pkg_add
+- pledge(2) and unveil(2) self-restriction on OpenBSD before the
+  event loop starts
+- OpenBSD port skeleton (@newuser/@newgroup, @rcscript, @sample)
+  building an installable tcptarpit-<version>.tgz

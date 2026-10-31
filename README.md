@@ -269,11 +269,11 @@ The daemon logs four kinds of lines to `daemon.info`:
 | Message                                             | Meaning                                   |
 |-----------------------------------------------------|-------------------------------------------|
 | `[+] bot trapped: IP:PORT`                          | new connection accepted and held          |
-| `[-] bot gave up: IP`                               | client closed cleanly (FIN), socket closed |
-| `[-] bot aborted: IP (ERROR)`                       | client sent RST or socket error, socket closed |
+| `[-] bot gave up after N s/min/h/d: IP`             | client closed cleanly (FIN) after a readable duration in the tarpit |
+| `[-] bot aborted after N s/min/h/d: IP (ERROR)`     | client sent RST or hit a socket error after a readable duration |
 | `[-] bot vanished before capture`                   | client reset the connection before accept() could read its address; dropped |
 | `[*] starting periodic cleanup of stale connections`| cleanup pass started                      |
-| `[*] kicking bot after N s hold time: IP:PORT`      | daemon timeout: connection closed after exceeding `max_age` |
+| `[*] kicking bot after N s/min/h/d hold time: IP:PORT` | daemon timeout: connection closed after exceeding `max_age` |
 
 ## Operating the blocklist
 
