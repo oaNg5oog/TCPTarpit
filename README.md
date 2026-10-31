@@ -11,6 +11,9 @@ The attacker's client sits there waiting for a response that never comes,
 wasting its time and its connection slots. The daemon is protocol agnostic:
 it works for SSH brute forcers as well as HTTP scanners and dir busters.
 
+> This repository is developed on an internal Gitea instance and
+> automatically published to GitHub through a push mirror.
+
 ## Files
 
 | File                  | Install to                        | Mode | Purpose                            |
