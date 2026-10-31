@@ -23,10 +23,12 @@ daemon_user="_tcptarpit"
 #   tcptarpit_stat_log=/var/log/tcptarpit.log
 tcptarpit_stat_log=/var/log/tcptarpit.log
 
-. /etc/rc.d/rc.subr
-
+# must be set before rc.subr is sourced - the command list is
+# evaluated at source time
 extra_commands="statistic"
 statistic_cmd=tcptarpit_statistic
+
+. /etc/rc.d/rc.subr
 
 # /etc/rc.d/tcptarpit statistic -- who is trapped RIGHT NOW (the daemon
 # is the only listener on its port, so netstat shows exactly the held
