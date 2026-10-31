@@ -28,6 +28,7 @@ my %config = (
     listen_port      => 8024,
     cleanup_interval => 1800,    # seconds between cleanup passes
     max_age          => 1800,    # seconds before a connection is closed
+    stutter          => 1,       # seconds per dribbled byte, 0 = pure silence
     log_file         => '',      # empty = stdout (syslog via daemon(8))
     pid_file         => '',      # empty = no pid file
     user             => '',      # empty = no privilege drop
@@ -111,6 +112,9 @@ sub validate_config {
             && $cfg->{$key} >= 1
             or die "invalid $key \"$cfg->{$key}\"\n";
     }
+
+    $cfg->{stutter} =~ /^\d+$/
+        or die "invalid stutter \"$cfg->{stutter}\" (seconds per byte, 0 = off)\n";
 
     for my $key (qw(log_file pid_file)) {
         next unless length $cfg->{$key};
@@ -311,8 +315,22 @@ my %connections;
 my $last_cleanup = time();
 
 while (1) {
-    # wait for events (10 seconds at most)
-    my @ready = $selector->can_read(10);
+    # wait for events; with stuttering active, wake up in time for the
+    # next byte due to a connection (otherwise up to 10 seconds)
+    my $timeout = 10;
+    if ($config{stutter} > 0) {
+        my ($now, $earliest) = (time());
+        for my $key (keys %connections) {
+            my $when = $connections{$key}->{next_stutter};
+            $earliest = $when if !defined $earliest || $when < $earliest;
+        }
+        if (defined $earliest) {
+            $timeout = $earliest - $now;
+            $timeout = 0 if $timeout < 0;
+            $timeout = 10 if $timeout > 10;
+        }
+    }
+    my @ready = $selector->can_read($timeout);
 
     foreach my $fh (@ready) {
         if (grep { $fh == $_ } @servers) {
@@ -334,10 +352,12 @@ while (1) {
                 # Hash keys are stringified globs, therefore the real
                 # handle is stored in the value as well (see cleanup loop).
                 $connections{$client} = {
-                    fh         => $client,
-                    ip         => $ip,
-                    port       => $port,
-                    start_time => time(),
+                    fh           => $client,
+                    ip           => $ip,
+                    port         => $port,
+                    start_time   => time(),
+                    next_stutter => time() + $config{stutter},
+                    sent_bytes   => 0,
                 };
             }
         } else {
@@ -371,6 +391,33 @@ while (1) {
                 delete $connections{$fh};
                 close($fh);
             }
+        }
+    }
+
+    # stutter pass: dribble one byte per connection per interval, like
+    # spamd(8).  sent_bytes is capped so the send buffer can never fill
+    # up and block the daemon, even for very large max_age values; a
+    # connection whose peer never reads simply stops receiving dribble
+    # and is still held and closed at max_age.
+    if ($config{stutter} > 0) {
+        my $now = time();
+        for my $key (keys %connections) {
+            my $rec = $connections{$key};
+            next if $now < $rec->{next_stutter};
+            next if $rec->{sent_bytes} >= 32000;
+            my $sock = $rec->{fh};
+            my $wrote = syswrite($sock, ' ');
+            if (!defined $wrote) {
+                # write error, usually a reset: the connection is gone
+                my $held = fmt_duration($now - $rec->{start_time});
+                logmsg("[-] bot aborted after $held: $rec->{ip} (write: $!)\n");
+                $selector->remove($sock);
+                close($sock);
+                delete $connections{$key};
+                next;
+            }
+            $rec->{sent_bytes} += $wrote;
+            $rec->{next_stutter} = $now + $config{stutter};
         }
     }
 

@@ -120,12 +120,46 @@ if ($base) {
     if (!$s) { verdict('probe', 0, "connect failed: $!"); exit 1 }
     syswrite($s, "GET / HTTP/1.0\r\n\r\n");
     my $sel = IO::Select->new($s);
-    my $answered = $sel->can_read(2) ? 1 : 0;
+    my $bytes = 0;
+    my $t0 = time;
+    while (time - $t0 < 2) {
+        if ($sel->can_read(0.2)) {
+            my $n = sysread($s, my $b, 64);
+            last unless $n;
+            $bytes += $n;
+        }
+    }
     syswrite($s, 'x' x 32);
     close $s;
-    verdict('probe', !$answered,
-        $answered ? 'daemon answered (must stay silent)'
-                  : 'silent, connection held and writable');
+    # with stuttering (default) at most a few dribbled bytes may arrive;
+    # a real response is never acceptable
+    verdict('probe', $bytes <= 3,
+        $bytes <= 3
+            ? sprintf('no response%s, connection held and writable',
+                      $bytes ? " ($bytes dribbled bytes)" : '')
+            : "daemon sent $bytes bytes within 2s (real response)");
+}
+
+# ---------------------------------------------------------------- stutter
+{
+    my $s = connect_one();
+    my $bytes = 0;
+    if ($s) {
+        my $t0 = time;
+        while (time - $t0 < 4) {
+            vec(my $rin = '', fileno($s), 1) = 1;
+            select($rin, undef, undef, 4);
+            my $n = sysread($s, my $b, 64);
+            last unless $n;
+            $bytes += $n;
+        }
+        close $s;
+    }
+    # ~1 byte per second with the default stutter interval
+    verdict('stutter', defined($s) && $bytes >= 2 && $bytes <= 7,
+        defined($s)
+            ? sprintf('%d bytes dribbled in 4s', $bytes)
+            : 'connect failed');
 }
 
 # ---------------------------------------------------------------- phase 1
@@ -259,7 +293,16 @@ my (@idle, $t0, $s1);
     if ($s) {
         syswrite($s, 'x');
         my $sel = IO::Select->new($s);
-        $works = $sel->can_read(2) ? 0 : 1;
+        my $bytes = 0;
+        my $t0 = time;
+        while (time - $t0 < 2) {
+            if ($sel->can_read(0.2)) {
+                my $n = sysread($s, my $b, 64);
+                last unless $n;
+                $bytes += $n;
+            }
+        }
+        $works = $bytes <= 3;
         close $s;
     }
     sleep 1;
@@ -285,11 +328,20 @@ if (length $host6) {
     else {
         syswrite($s, 'x');
         my $sel = IO::Select->new($s);
-        my $answered = $sel->can_read(2) ? 1 : 0;
+        my $bytes = 0;
+        my $t0 = time;
+        while (time - $t0 < 2) {
+            if ($sel->can_read(0.2)) {
+                my $n = sysread($s, my $b, 64);
+                last unless $n;
+                $bytes += $n;
+            }
+        }
         close $s;
-        verdict('v6_probe', !$answered,
-            $answered ? 'daemon answered on IPv6 (must stay silent)'
-                      : "silent on IPv6 ($host6), connection held");
+        verdict('v6_probe', $bytes <= 3,
+            $bytes <= 3
+                ? "no response on IPv6 ($host6), $bytes dribbled"
+                : "daemon sent $bytes bytes on IPv6");
     }
 }
 

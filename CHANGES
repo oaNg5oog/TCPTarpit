@@ -1,6 +1,12 @@
 tcptarpit - change history
 
 1.3.0 (2026-10-31)
+- stutter mode like spamd(8): by default one filler byte is dribbled
+  back per connection per second, so trapped clients keep waiting for
+  a real response; stutter=0 restores pure silence. The dribble is
+  capped per connection (32 KiB) so the send buffer can never fill
+  and block the daemon; write errors close the connection with the
+  usual abort logging.
 - IPv6 support: the socket layer moved from IO::Socket::INET to
   IO::Socket::IP (part of the OpenBSD base perl). IPv4 and IPv6 are
   both enabled by default (127.0.0.1 and ::1) and each family is

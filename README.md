@@ -1,11 +1,13 @@
 # tcptarpit - generic layer-4 TCP tarpit for OpenBSD
 
 `tcptarpit` is a small single-process daemon for OpenBSD that traps abusive
-TCP clients in a connection that never answers. It follows the same pf
-pattern as OpenBSD's own spamd(8): pf rate rules overload offending source
-addresses into a table, and a `rdr-to` rule diverts their connections to a
-loopback listener which accepts them - and then never sends a single byte
-back.
+TCP clients in a connection that never yields a real answer. It follows the
+same pf pattern as OpenBSD's own spamd(8): pf rate rules overload offending
+source addresses into a table, and a `rdr-to` rule diverts their connections
+to a loopback listener. Like spamd the daemon stutters by default: incoming
+data is read and discarded, and a single filler byte is dribbled back per
+connection per second, so clients keep waiting for a response that never
+properly arrives. Pure silence is available via `stutter=0`.
 
 The attacker's client sits there waiting for a response that never comes,
 wasting its time and its connection slots. The daemon is protocol agnostic:
@@ -166,6 +168,7 @@ message, following the fail-fast convention of OpenBSD daemons.
 | `listen_port`      | `8024`      | listen port; must match the `rdr-to` rules in pf.conf |
 | `cleanup_interval` | `1800`      | seconds between cleanup passes over stale connections |
 | `max_age`          | `1800`      | seconds before a held connection is closed with FIN |
+| `stutter`         | `1`        | seconds per dribbled filler byte (spamd-style stutter); `0` = pure silence |
 | `log_file`         | *(empty)*   | empty = stdout (syslog via daemon(8)); or an absolute path for file logging |
 | `pid_file`         | *(empty)*   | optional pid file, e.g. `/var/run/tcptarpit/tcptarpit.pid` |
 | `user`             | *(empty)*   | drop privileges to this user after startup (see below) |

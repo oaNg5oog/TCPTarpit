@@ -209,6 +209,30 @@ sends that signal to the pid listed in `pid_file`:
 `SIGPIPE` is ignored so a broken syslog pipe cannot kill the daemon;
 `SIGTERM`/`SIGINT` remove the pid file and exit.
 
+## Stutter mode
+
+Since 1.3.0 the daemon dribbles one filler byte per connection per
+`stutter` seconds (default 1), mirroring spamd(8): a client that
+receives occasional data keeps waiting for a complete response and
+stays far longer than against total silence. `stutter=0` restores
+the previous pure-silence behaviour.
+
+Implementation notes:
+
+* the select timeout shrinks to the earliest due byte, so the event
+  loop wakes at most once per interval; per wake-up one byte per due
+  connection is written.
+* the dribble per connection is capped at 32 KiB: a peer that never
+  reads stops receiving filler instead of filling the socket send
+  buffer - the daemon can never block on a write, independent of
+  max_age and stutter settings.
+* a failed write (typically a reset) closes the connection through
+  the same path as a read-side abort, with hold duration and error
+  in the log.
+* resource cost is one byte per connection per interval - 450 held
+  connections produce ~450 B/s of traffic (measured in the load
+  test: no CPU increase, no RSS increase).
+
 ## Socket layer and address families
 
 Since 1.3.0 the daemon uses IO::Socket::IP from the OpenBSD base

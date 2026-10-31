@@ -12,13 +12,21 @@
 .Sh DESCRIPTION
 The
 .Nm
-daemon traps abusive TCP clients in connections that never answer.
-It listens on a loopback address and port (127.0.0.1:8024 by default),
+daemon traps abusive TCP clients in connections that never yield a
+real answer.
+It listens on loopback addresses (127.0.0.1 and ::1 by default),
 accepts every connection diverted to it by
 .Xr pf 4 ,
-and then never sends a single byte back.
-Incoming data is read and discarded, so the client's TCP window runs
-full while it waits for a response that never comes.
+and reads and discards all incoming data.
+Like
+.Xr spamd 8 ,
+it stutters by default: a single filler byte is dribbled back per
+connection once per
+.Ic stutter
+seconds, so the client keeps waiting for a response that never
+properly arrives; with
+.Ic stutter
+set to 0 the daemon stays completely silent instead.
 .Pp
 Sources reach the tarpit through the same mechanism as
 .Xr spamd 8 :
@@ -110,6 +118,15 @@ plus
 .Ic cleanup_interval .
 Default:
 .Li 1800 .
+.It Ic stutter
+Seconds per dribbled filler byte, like
+.Xr spamd 8
+stuttering: one byte per connection per interval keeps clients
+waiting for a response that never properly arrives.
+.Li 0
+disables stuttering for pure silence.
+Default:
+.Li 1 .
 .It Ic log_file
 Log into this file instead of stdout.
 Empty (the default) logs to stdout, which

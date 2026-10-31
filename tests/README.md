@@ -16,7 +16,9 @@ after deployment.
 
 | Phase | What it does | What it proves |
 |---|---|---|
-| probe | connect, send, wait 2 s, write again | tarpit stays silent and holds the connection |
+| probe | connect, send, count bytes for 2 s, write again | no real response ever arrives (at most a few stutter bytes), connection held |
+| stutter | count bytes for 4 s | default stutter dribbles ~1 byte/s (spamd-style) |
+| v6_probe | same as probe against ::1 | IPv6 listener traps silently as well (SKIP if v6 unavailable) |
 | idle_flood | 300 concurrent silent connections, 5 s | memory per held connection < 32 KiB, CPU bounded |
 | data_flood | 50 connections push 100 MiB total | 64 KiB drain keeps daemon CPU near zero |
 | churn | 1000 connect+FIN and 500 connect+RST cycles | disconnect storms cost bounded CPU, daemon survives |

@@ -25,6 +25,12 @@
 # max_age + cleanup_interval.
 #max_age=1800
 
+# Stutter, like spamd(8): seconds per filler byte dribbled back to the
+# trapped client.  Keeps bots waiting for a real response; 0 disables
+# stuttering for pure silence.  Total dribble is capped internally so
+# the send buffer can never fill up.
+#stutter=1
+
 # Log file.  Empty logs to stdout, which daemon(8) pipes to syslog
 # (daemon.info -> /var/log/daemon).  Set to log into a dedicated file
 # instead; see the newsyslog(8) example in tcptarpit(8) for rotation.
