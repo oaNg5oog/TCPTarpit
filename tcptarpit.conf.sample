@@ -1,0 +1,20 @@
+# tcptarpit(8) configuration file.
+#
+# Copy this file to /etc/tcptarpit.conf and adjust as needed.  The daemon
+# also runs with the built-in defaults listed below if the file is
+# absent; a malformed file aborts startup.
+
+# Address to listen on.  The loopback default keeps the tarpit
+# unreachable from the outside; only pf rdr-to traffic arrives here.
+#listen_ip=127.0.0.1
+
+# Port to listen on.  Must match the rdr-to rule in /etc/pf.conf.
+#listen_port=8024
+
+# Seconds between cleanup passes over stale connections.
+#cleanup_interval=1800
+
+# Maximum age of a held connection in seconds before the daemon closes
+# it with a FIN.  The effective hold time lies between max_age and
+# max_age + cleanup_interval.
+#max_age=1800

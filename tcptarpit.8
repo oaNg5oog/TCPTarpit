@@ -1,0 +1,169 @@
+.\" tcptarpit(8) - manual page in mdoc(7), formatted for OpenBSD.
+.\"
+.Dd October 31, 2026
+.Dt TCPTARPIT 8
+.Os
+.Sh NAME
+.Nm tcptarpit
+.Nd generic layer-4 TCP tarpit for abusive clients
+.Sh SYNOPSIS
+.Nm
+.Op Ar config-file
+.Sh DESCRIPTION
+The
+.Nm
+daemon traps abusive TCP clients in connections that never answer.
+It listens on a loopback address and port (127.0.0.1:8024 by default),
+accepts every connection diverted to it by
+.Xr pf 4 ,
+and then never sends a single byte back.
+Incoming data is read and discarded, so the client's TCP window runs
+full while it waits for a response that never comes.
+.Pp
+Sources reach the tarpit through the same mechanism as
+.Xr spamd 8 :
+.Xr pf.conf 5
+rules using
+.Ic max-src-conn-rate
+with
+.Ic overload
+move offending addresses into the
+.Ao bruteforcers Ac
+pf table, and an
+.Ic rdr-to
+rule diverts subsequent connections from listed addresses to the
+daemon.
+The daemon is protocol agnostic and traps SSH brute forcers as well as
+HTTP scanners and directory busters.
+.Pp
+Connections are held until the client gives up, or until they exceed
+the configured maximum age, at which point they are closed with a
+normal FIN during the next cleanup pass.
+.Pp
+The daemon is started via
+.Xr rc.d 8
+and
+.Xr rcctl 8 ;
+see
+.Sx EXAMPLES .
+Output is sent to
+.Xr syslogd 8
+at
+.Dq daemon.info
+through
+.Xr daemon 8 .
+.Sh CONFIGURATION
+If present,
+.Nm
+reads its configuration from
+.Pa /etc/tcptarpit.conf .
+If the file is missing, built-in defaults are used and a warning is
+logged.
+A malformed file aborts startup with a
+.Pa file : line
+error message.
+An alternative configuration file can be given as the only argument.
+.Pp
+The following keys are recognized:
+.Bl -tag -width Ds
+.It Ic listen_ip
+Address to listen on.
+Default:
+.Li 127.0.0.1 .
+.It Ic listen_port
+Port to listen on; must match the
+.Ic rdr-to
+rule in
+.Xr pf.conf 5 .
+Default:
+.Li 8024 .
+.It Ic cleanup_interval
+Seconds between cleanup passes over stale connections.
+Default:
+.Li 1800 .
+.It Ic max_age
+Maximum age of a held connection in seconds before it is closed.
+The effective hold time lies between
+.Ic max_age
+and
+.Ic max_age
+plus
+.Ic cleanup_interval .
+Default:
+.Li 1800 .
+.El
+.Sh EXAMPLES
+Install the daemon, enable and start it at boot:
+.Bd -literal -offset indent
+install -m 0755 tcptarpit.pl /usr/local/bin/tcptarpit.pl
+install -m 0555 tcptarpit /etc/rc.d/tcptarpit
+install -m 0644 tcptarpit.conf.sample /etc/tcptarpit.conf
+install -m 0444 tcptarpit.8 /usr/local/man/man8/tcptarpit.8
+
+rcctl enable tcptarpit
+rcctl start tcptarpit
+.Ed
+.Pp
+Typical
+.Xr pf.conf 5
+ruleset; the tarpit redirect must precede the ordinary pass rules:
+.Bd -literal -offset indent
+ext_if = "em0"
+
+table <bruteforcers> persist
+
+# never tarpit the admins
+table <admins> const { 198.51.100.10 }
+pass in quick on $ext_if from <admins>
+
+# everyone on the list goes straight into the tarpit
+pass in quick on $ext_if proto tcp from <bruteforcers> \e
+    to any port { ssh, http, https } rdr-to 127.0.0.1 port 8024
+
+# SSH watch: more than 3 connections within 30 seconds goes on the list
+pass in on $ext_if proto tcp to any port ssh flags S/SA keep state \e
+    (max-src-conn-rate 3/30, overload <bruteforcers> flush global)
+
+# webserver watch
+pass in on $ext_if proto tcp to any port { http, https } \e
+    flags S/SA keep state \e
+    (max-src-conn-rate 30/10, overload <bruteforcers> flush global)
+.Ed
+.Pp
+Inspect and edit the address list with
+.Xr pfctl 8 :
+.Bd -literal -offset indent
+pfctl -t bruteforcers -T show
+pfctl -t bruteforcers -T delete 203.0.113.7
+.Ed
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa /etc/tcptarpit.conf
+Daemon configuration.
+.It Pa /usr/local/bin/tcptarpit.pl
+The daemon itself.
+.It Pa /etc/rc.d/tcptarpit
+.Xr rc.d 8
+control script.
+.El
+.Sh SEE ALSO
+.Xr pf 4 ,
+.Xr pf.conf 5 ,
+.Xr daemon 8 ,
+.Xr pfctl 8 ,
+.Xr rc 8 ,
+.Xr rc.d 8 ,
+.Xr rc.conf 8 ,
+.Xr rcctl 8 ,
+.Xr spamd 8 ,
+.Xr syslogd 8
+.Sh CAVEATS
+Only IPv4 is supported.
+The number of simultaneously held connections is bounded by the process
+file descriptor limit.
+Because listing is based on connection rates, legitimate clients that
+exceed the same rate can end up in the tarpit as well; keep trusted
+addresses in an exemption table that is matched before the redirect.
+.Xr pf 4
+table entries are kept by the running kernel only and do not survive a
+reboot unless the table is backed by a file.

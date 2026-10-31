@@ -1,22 +1,24 @@
 #!/bin/ksh
 
-# Der Pfad zu unserem Perl-Skript
+# tcptarpit rc.d(8) script -- install as /etc/rc.d/tcptarpit
+# and enable with: rcctl enable tcptarpit && rcctl start tcptarpit
+
 daemon="/usr/local/bin/tcptarpit.pl"
 
-# Definiert die Syslog-Facility und Priorität für die Ausgaben
+# daemon(8) pipes stdout/stderr to syslog with this facility.level
 daemon_logger="daemon.info"
 
-# Wir nutzen das OpenBSD-Hilfstool 'daemon', um das Skript im Hintergrund zu starten
-daemon_flags=""
+# Optional hardening: run unprivileged (port 8024 needs no root,
+# see README.md -- create the user first):
+#daemon_user="_tarpit"
 
 . /etc/rc.d/rc.subr
 
-# Da es sich um ein interpretiertes Skript handelt, müssen wir pexp anpassen,
-# damit rc.subr den Prozess anhand des Namens in der Prozessliste wiederfindet.
+# Interpreted script: rc.subr must find the perl process in the
+# process list instead of the script itself.
 pexp="perl ${daemon}${daemon_flags:+ ${daemon_flags}}"
 
 rc_reload=NO
 rc_bg=YES
 
 rc_cmd $1
-
