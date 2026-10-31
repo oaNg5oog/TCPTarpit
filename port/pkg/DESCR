@@ -1,0 +1,19 @@
+generic layer-4 TCP tarpit for abusive clients.
+
+tcptarpit accepts connections that pf(4) diverts to it via rdr-to -
+for example sources overloaded into a <bruteforcers> table by
+max-src-conn-rate rules - and never sends a single byte back.  Incoming
+data is read and discarded, so the trapped client waits for a response
+that never comes while its TCP window runs full.  Connections are held
+until the client gives up or a configurable hold time expires.
+
+The package creates the unprivileged daemon user _tcptarpit and
+installs the rc.d(8) script; the daemon runs as _tcptarpit without any
+manual steps.
+
+Configuration lives in /etc/tcptarpit.conf (sample in
+/usr/local/share/examples/tcptarpit/); enable and start the daemon
+with:
+
+	rcctl enable tcptarpit
+	rcctl start tcptarpit

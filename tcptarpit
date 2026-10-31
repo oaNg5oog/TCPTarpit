@@ -1,16 +1,17 @@
 #!/bin/ksh
 
-# tcptarpit rc.d(8) script -- install as /etc/rc.d/tcptarpit
-# and enable with: rcctl enable tcptarpit && rcctl start tcptarpit
+# tcptarpit rc.d(8) script -- installed by the package as /etc/rc.d/tcptarpit
+# and enabled with: rcctl enable tcptarpit && rcctl start tcptarpit
 
 daemon="/usr/local/bin/tcptarpit.pl"
 
 # daemon(8) pipes stdout/stderr to syslog with this facility.level
 daemon_logger="daemon.info"
 
-# Optional hardening: run unprivileged (port 8024 needs no root,
-# see README.md -- create the user first):
-#daemon_user="_tarpit"
+# Run unprivileged: the _tcptarpit user/group is created automatically
+# by pkg_add(1) (@newuser/@newgroup in the package PLIST).  For manual
+# installations create it first, see README.md.
+daemon_user="_tcptarpit"
 
 . /etc/rc.d/rc.subr
 

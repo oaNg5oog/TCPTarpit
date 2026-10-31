@@ -199,7 +199,7 @@ Rotation: on SIGHUP the daemon reopens the log file. newsyslog(8)
 sends that signal to the pid listed in `pid_file`:
 
 ```sh
-/var/log/tcptarpit.log _tarpit:_tarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
+/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
 ```
 
 `SIGPIPE` is ignored so a broken syslog pipe cannot kill the daemon;
@@ -261,6 +261,10 @@ with the exact acceptance criteria:
 Not testable on the development machine, must be verified on OpenBSD
 after installation:
 
+* Port build and package install: `make install` / `make package` +
+  `pkg_add`, especially the automatic `_tcptarpit` user/group creation
+  (`@newuser`/`@newgroup`), `@rcscript` into /etc/rc.d and `@sample`
+  config handling.
 * The actual root-to-user `setuid` drop (guard cases are covered above,
   the setuid branch itself requires starting as root).
 * `rcctl start/stop/check/status` lifecycle including `pkg_scripts`
@@ -271,10 +275,42 @@ after installation:
   of listed sources, `flush global` behaviour, whitelisting via an
   `<admins>` quick-pass rule.
 
-## Future: OpenBSD port
+## OpenBSD port and automatic daemon user
 
-The tree is already shaped for packaging: mdoc(7) manual page, `.sample`
-configuration for `/etc`, rc.d script for `/etc/rc.d` + `pkg_scripts`,
-binary path under `/usr/local/bin`, no dependencies beyond base perl.
-A port would add `Makefile`/`distinfo`/`pkg/PLIST` around exactly these
-files.
+The `port/` directory contains a complete port skeleton:
+
+```
+port/Makefile     local port without distfile, installs from this repo
+port/pkg/PLIST    file list + @newgroup/@newuser/@rcscript/@sample
+port/pkg/DESCR    package description
+```
+
+`make install` (or `make package` + `pkg_add tcptarpit-1.0.tgz`) does
+the following automatically, like other OpenBSD daemon packages:
+
+* `@newgroup _tcptarpit:960` and
+  `@newuser _tcptarpit:960:960::tcptarpit daemon:/nonexistent:/sbin/nologin`
+  create the group and user during pkg_add(1) (field order
+  name:uid:gid:loginclass:comment:home:shell, as documented in
+  pkg_create(1) and used by e.g. audio/mpd and net/mosquitto). The
+  uid/gid 960 lies above the current ports uid registry (which ends
+  below 910) to avoid collisions with official ports; it is noted in a
+  PLIST `@comment` and can be changed if it ever collides locally.
+* `@rcscript ${RCDIR}/tcptarpit` installs the rc.d script
+  (`RCDIR ?= /etc/rc.d` in bsd.port.mk), i.e. packages really do place
+  daemon control scripts in /etc/rc.d.
+* `@sample ${SYSCONFDIR}/tcptarpit.conf` copies the packaged sample
+  (share/examples/tcptarpit/tcptarpit.conf) to /etc/tcptarpit.conf on
+  first install and leaves an existing configuration untouched; on
+  pkg_delete the configuration is only removed if unchanged.
+* The rc script sets `daemon_user="_tcptarpit"`, so the daemon runs
+  unprivileged out of the box.
+
+On pkg_delete(1) the `_tcptarpit` user and group are removed with
+extra clean-up (`pkg_delete -c`) if no other package references them.
+
+Building a package requires an OpenBSD machine with the ports tree
+(ports must be built on the target OS); the port skeleton therefore
+follows the porting conventions exactly but its build could not be
+executed on the Linux development machine - see the verification
+matrix below.

@@ -19,6 +19,7 @@ it works for SSH brute forcers as well as HTTP scanners and dir busters.
 | `tcptarpit`           | `/etc/rc.d/tcptarpit`             | 0555 | rc.d(8) start/stop integration     |
 | `tcptarpit.conf.sample` | `/etc/tcptarpit.conf`           | 0644 | configuration (copy and edit)      |
 | `tcptarpit.8`         | `/usr/local/man/man8/tcptarpit.8` | 0444 | manual page in mdoc(7) format      |
+| `port/`               | -                                 | -    | OpenBSD port skeleton (see below)  |
 
 ## Requirements
 
@@ -27,6 +28,52 @@ it works for SSH brute forcers as well as HTTP scanners and dir busters.
   the daemon only uses `IO::Socket::INET` and `IO::Select`, both core.
 
 ## Installation
+
+### Option A: package via the port (recommended)
+
+Build and install directly from the repository (requires the OpenBSD
+ports tree, e.g. from the `ports.tar.gz` of your release):
+
+```sh
+cd port
+doas make install
+```
+
+Or build a `.tgz` package first and install it with pkg_add(1) on this
+or another OpenBSD machine of the same release and architecture:
+
+```sh
+cd port
+make package          # path of the .tgz is printed at the end
+doas pkg_add /usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
+```
+
+The package does everything automatically, like other OpenBSD daemon
+packages:
+
+* creates the group and user `_tcptarpit` (`@newgroup`/`@newuser` in
+  `port/pkg/PLIST`; uid/gid 960, see the comment there on collisions),
+* installs the rc.d(8) script into `/etc/rc.d/tcptarpit` (`@rcscript`),
+* installs `/etc/tcptarpit.conf` from the sample on first install and
+  leaves an existing configuration untouched (`@sample`),
+* the rc script runs the daemon as `_tcptarpit` (`daemon_user`), so no
+  root privileges are ever needed at runtime.
+
+`pkg_delete tcptarpit` removes files and configuration again
+(configuration only if unchanged); add `-c` to also remove the
+`_tcptarpit` user and group.
+
+### Option B: manual installation
+
+Create the daemon user first - the rc script expects it:
+
+```sh
+groupadd -g 960 _tcptarpit
+useradd -g _tcptarpit -c "tcptarpit daemon" \
+    -d /nonexistent -s /sbin/nologin _tcptarpit
+```
+
+Then install the files:
 
 ```sh
 install -m 0755 tcptarpit.pl         /usr/local/bin/tcptarpit.pl
@@ -78,16 +125,16 @@ For a dedicated log file set `log_file=/var/log/tcptarpit.log`. The file
 must exist and be writable by the daemon user:
 
 ```sh
-install -o _tarpit -g _tarpit -m 0640 /dev/null /var/log/tcptarpit.log
+install -o _tcptarpit -g _tcptarpit -m 0640 /dev/null /var/log/tcptarpit.log
 ```
 
 Rotation through newsyslog(8): the daemon reopens its log file on
 SIGHUP, and newsyslog signals the pid file given in the last column:
 
 ```sh
-mkdir -p /var/run/tcptarpit && chown _tarpit /var/run/tcptarpit
+mkdir -p /var/run/tcptarpit && chown _tcptarpit /var/run/tcptarpit
 # /etc/newsyslog.conf:
-/var/log/tcptarpit.log _tarpit:_tarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
+/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
 ```
 
 With `pid_file` set, the daemon writes its process id at startup and
@@ -95,24 +142,18 @@ removes the file on exit.
 
 ## Running unprivileged
 
-Port 8024 needs no root. Two supported ways, use either:
+Port 8024 needs no root, and the daemon never needs root after startup.
+The shipped rc script already contains `daemon_user="_tcptarpit"`, so
+with the package (or a manual install that created the user as shown
+above) the daemon starts unprivileged from the beginning - nothing to
+do.
 
-1. **rc.subr `daemon_user`** (recommended): uncomment
-   `daemon_user="_tarpit"` in `/etc/rc.d/tcptarpit`. The daemon starts
-   unprivileged from the beginning.
-
-2. **In-daemon privilege drop**: set `user=_tarpit` (optionally
-   `group=`) in `/etc/tcptarpit.conf`. The daemon opens the listen
-   socket, log file and pid file first, then switches uid/gid before
-   entering the event loop. If it is already running as that user the
-   drop is a no-op; switching to another user without root aborts
-   startup.
-
-Create the dedicated user once:
-
-```sh
-useradd -c "tcptarpit daemon" -d /nonexistent -s /sbin/nologin _tarpit
-```
+The in-daemon alternative is the privilege drop via configuration: set
+`user=_tcptarpit` (optionally `group=`) in `/etc/tcptarpit.conf`. The
+daemon opens the listen socket, log file and pid file first, then
+switches uid/gid before entering the event loop. If it is already
+running as that user the drop is a no-op; switching to another user
+without root aborts startup.
 
 ## pf configuration
 
@@ -200,10 +241,14 @@ pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
 
 ## Packaging notes
 
-The repository is laid out for a later OpenBSD port: mdoc(7) manual page,
-configuration shipped as `.sample` (ports must not overwrite files in
-`/etc`), rc.d script in `/etc/rc.d` enabled through `pkg_scripts`, daemon
-binary under `/usr/local/bin`.
+The repository contains a ready OpenBSD port skeleton in `port/`
+(`Makefile`, `pkg/PLIST`, `pkg/DESCR`) that installs the files directly
+from this repository: the `@newgroup`/`@newuser` PLIST directives create
+`_tcptarpit` automatically during `pkg_add(1)`, `@rcscript` installs the
+rc.d script into `/etc/rc.d`, and `@sample` installs
+`/etc/tcptarpit.conf` from the packaged sample without touching an
+existing configuration. `make package` builds an installable
+`tcptarpit-1.0.tgz`. See `Architektur.md` for details.
 
 ## Verification status
 
@@ -217,21 +262,33 @@ another user without root, abort on unknown user). CPU cost of a 1 MB
 flood burst: ~0 s (the previous 1-byte-read variant needed ~11 s CPU per
 MB). See `Architektur.md` for the measurements.
 
-**Not yet verified on OpenBSD hardware:** the actual root-to-user
-`setuid` drop (requires starting as root), the rc.d lifecycle
-(`rcctl start/stop/check/status`), the `daemon_logger` path into
-`/var/log/daemon`, newsyslog(8) rotation in production, and the pf
-table/`rdr-to` interaction. Verify these on the target system after
-installation - see *Installation* and `Architektur.md` for the expected
-results.
+**Not yet verified on OpenBSD hardware:** building and installing the
+package (`make install` / `make package` + `pkg_add`), especially the
+automatic `_tcptarpit` user/group creation via `@newuser`/`@newgroup`,
+the actual root-to-user `setuid` drop (requires starting as root), the
+rc.d lifecycle (`rcctl start/stop/check/status`), the `daemon_logger`
+path into `/var/log/daemon`, newsyslog(8) rotation in production, and
+the pf table/`rdr-to` interaction. Verify these on the target system
+after installation - see *Installation* and `Architektur.md` for the
+expected results.
 
 ## Uninstall
+
+Installed as a package:
+
+```sh
+rcctl stop tcptarpit
+doas pkg_delete tcptarpit          # add -c to also remove _tcptarpit
+```
+
+Manual installation:
 
 ```sh
 rcctl stop    tcptarpit
 rcctl disable tcptarpit
 rm /usr/local/bin/tcptarpit.pl /etc/rc.d/tcptarpit \
    /etc/tcptarpit.conf /usr/local/man/man8/tcptarpit.8
+userdel _tcptarpit; groupdel _tcptarpit
 # remove the tarpit/overload rules from /etc/pf.conf, then:
 pfctl -f /etc/pf.conf
 ```

@@ -168,17 +168,28 @@ pfctl -t bruteforcers -T show
 pfctl -t bruteforcers -T delete 203.0.113.7
 .Ed
 .Pp
-Run unprivileged with a dedicated log file and rotation:
+Install from the package (recommended): the
+.Xr pkg_add 1
+step creates the unprivileged
+.Dq _tcptarpit
+user and group automatically
+.Pq Pa @newuser Ns / Ns Pa @newgroup No in the package PLIST,
+and the rc script runs the daemon as that user.
+.Pp
+Run unprivileged with a dedicated log file and rotation (manual
+installation):
 .Bd -literal -offset indent
-useradd -c "tcptarpit daemon" -d /nonexistent -s /sbin/nologin _tarpit
-mkdir -p /var/run/tcptarpit && chown _tarpit /var/run/tcptarpit
-install -o _tarpit -g _tarpit -m 0640 /dev/null /var/log/tcptarpit.log
+groupadd -g 960 _tcptarpit
+useradd -g _tcptarpit -c "tcptarpit daemon" -d /nonexistent \e
+    -s /sbin/nologin _tcptarpit
+mkdir -p /var/run/tcptarpit && chown _tcptarpit /var/run/tcptarpit
+install -o _tcptarpit -g _tcptarpit -m 0640 /dev/null /var/log/tcptarpit.log
 .Ed
 .Pp
 In
 .Pa /etc/tcptarpit.conf :
 .Bd -literal -offset indent
-user=_tarpit
+user=_tcptarpit
 log_file=/var/log/tcptarpit.log
 pid_file=/var/run/tcptarpit/tcptarpit.pid
 .Ed
@@ -186,7 +197,7 @@ pid_file=/var/run/tcptarpit/tcptarpit.pid
 In
 .Pa /etc/newsyslog.conf :
 .Bd -literal -offset indent
-/var/log/tcptarpit.log _tarpit:_tarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
+/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid
 .Ed
 .Sh FILES
 .Bl -tag -width Ds
