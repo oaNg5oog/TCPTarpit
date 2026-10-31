@@ -1,5 +1,15 @@
 tcptarpit - change history
 
+1.4.4 (2026-10-31)
+- fix wrong content in /etc/login.conf.d/tcptarpit on fresh installs:
+  @sample copies the last preceding file of the PLIST, and the daemon
+  configuration sample stood between the login class sample and its
+  @sample directive - so fresh installs wrote the daemon config into
+  the login class file (no valid tcptarpit record, usermod failed
+  with "No such login class"). Each @sample now directly follows its
+  source file. Systems with a pre-existing correct class file never
+  triggered this (sample never overwrites existing files).
+
 1.4.3 (2026-10-31)
 - fix fresh-install failure found on a production machine: @newuser
   referenced the tcptarpit login class, but pkg_add runs @newuser

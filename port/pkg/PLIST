@@ -4,23 +4,26 @@
 @comment @newuser runs before any file is extracted, so the class file
 @comment installed by @sample does not exist yet at that point (found on
 @comment a fresh production install: "useradd: No such login class").
+@comment each @sample must DIRECTLY follow its source file: @sample copies
+@comment the last preceding file - an interleaved second file silently
+@comment installs the wrong content (found on a fresh install as well).
 @newgroup _tcptarpit:960
 @newuser _tcptarpit:960:960::tcptarpit daemon:/nonexistent:/sbin/nologin
 @rcscript ${RCDIR}/tcptarpit
 bin/tcptarpit.pl
 @man man/man8/tcptarpit.8
 share/doc/pkg-readmes/tcptarpit
-@exec echo "tcptarpit installed - post-installation guide: ${PREFIX}/share/doc/pkg-readmes/tcptarpit"
+@exec echo "tcctarpit installed - post-installation guide: ${PREFIX}/share/doc/pkg-readmes/tcptarpit"
 @exec echo "quick start: rcctl enable tcptarpit && rcctl start tcptarpit"
 share/doc/tcptarpit/
 share/doc/tcptarpit/CHANGES
 share/examples/tcptarpit/
 share/examples/tcptarpit/login.conf.d/
 share/examples/tcptarpit/login.conf.d/tcptarpit
-share/examples/tcptarpit/tcptarpit.conf
 @sample ${SYSCONFDIR}/login.conf.d/tcptarpit
 @exec [ -f ${SYSCONFDIR}/login.conf.d/tcptarpit ] && cap_mkdb ${SYSCONFDIR}/login.conf.d/tcptarpit
 @exec id _tcptarpit >/dev/null 2>&1 && usermod -L tcptarpit _tcptarpit || true
+share/examples/tcptarpit/tcptarpit.conf
 @sample ${SYSCONFDIR}/tcptarpit.conf
 @comment runtime dirs and log file for the default file logging
 @exec [ -d /var/run/tcptarpit ] || install -d -o _tcptarpit -g _tcptarpit /var/run/tcptarpit
