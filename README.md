@@ -415,12 +415,13 @@ verified under real traffic; internet scanners are trapped
 continuously with hold durations up to 8 min 35 s, and a complete
 newsyslog(8) rotation cycle ran live ("logfile turned over" ->
 SIGHUP via the pid file -> "log file reopened after rotation",
-logging continued without a gap).
+logging continued without a gap). IPv6 is verified end to end in
+production as well: a real IPv6 scanner was trapped through the
+inet6 pf rule and rdr-to ::1 ("[+] bot trapped: 2a06:...:60573",
+gave up after 3 s).
 
-**Still open:** IPv6 traffic through pf with a global IPv6 address
-(the test VM has none - the inet6 rules are documented but untested
-with real traffic) and the in-daemon `setuid` branch (the package
-path runs unprivileged from the start).
+**Still open:** the in-daemon `setuid` branch (the package path runs
+unprivileged from the start).
 
 ## Uninstall
 

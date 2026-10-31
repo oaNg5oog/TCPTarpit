@@ -450,19 +450,16 @@ rebuilding after a release upgrade.
 * IPv6 (1.3.0): default dual-stack listeners verified on the
   development machine (v4 and v6 connections trapped and held
   silently, ::1 in the log) and on the OpenBSD 8.0 test system on
-  ::1; v6-only and "both empty" fail-fast cases verified. External
-  IPv6 traffic through pf could NOT be tested - the test VM has no
-  global IPv6 address on vio0; the inet6 pf rules are documented
-  accordingly.
+  ::1; v6-only and "both empty" fail-fast cases verified.
+  Production (1.4.6, firewall with global IPv6): a real IPv6
+  scanner ran through the complete chain - inet6 pf rule, rdr-to
+  ::1, trapped with the original v6 source address in the log,
+  gave up after 3 s.
 
 Still open:
 
 * The in-daemon root-to-user `setuid` branch (the package path runs
   unprivileged from the start via daemon_user, so the drop is a no-op).
-* newsyslog(8) rotation with log_file/pid_file in production.
-* pf interplay: `max-src-conn-rate` overload entries, `rdr-to` redirect
-  of listed sources, `flush global` behaviour, whitelisting via an
-  `<admins>` quick-pass rule.
 
 ## OpenBSD port and automatic daemon user
 
