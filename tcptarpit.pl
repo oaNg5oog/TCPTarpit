@@ -233,11 +233,13 @@ sub apply_unveil {
         OpenBSD::Unveil::unveil($dir, "wc")
             or die "unveil($dir) failed: $!\n";
         # unlink() on the pid file needs the file itself unveiled with
-        # "c" - the directory unveil alone is not sufficient for the
-        # removal (verified on OpenBSD 8.0: EPERM otherwise).  The file
-        # always exists at this point because write_pidfile() ran
-        # before the unveil.
-        OpenBSD::Unveil::unveil($config{pid_file}, "c")
+        # "cr": "r" because perl's unlink lstat()s the file first
+        # (stat needs read permission under unveil), "c" for the
+        # removal itself - the directory unveil alone is not
+        # sufficient (verified on OpenBSD 8.0: EPERM and an empty $!
+        # otherwise).  The file always exists at this point because
+        # write_pidfile() ran before the unveil.
+        OpenBSD::Unveil::unveil($config{pid_file}, "cr")
             or die "unveil($config{pid_file}) failed: $!\n";
     }
     OpenBSD::Unveil::unveil()    # lock: no further unveil calls
