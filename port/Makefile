@@ -34,9 +34,8 @@ do-install:
 	${INSTALL_DATA_DIR} ${PREFIX}/share/doc/tcptarpit
 	${INSTALL_DATA} ${TCPTARPIT_SRCDIR}/CHANGES \
 		${PREFIX}/share/doc/tcptarpit/CHANGES
-	${INSTALL_DATA_DIR} ${PREFIX}/share/doc/pkg-readmes
-	${INSTALL_DATA} ${.CURDIR}/pkg/README \
-		${PREFIX}/share/doc/pkg-readmes/tcptarpit
+# pkg/README is installed into share/doc/pkg-readmes/ automatically
+# by the ports framework
 	${INSTALL_SCRIPT} ${TCPTARPIT_SRCDIR}/tcptarpit ${DESTDIR}${RCDIR}/tcptarpit
 
 .include <bsd.port.mk>
