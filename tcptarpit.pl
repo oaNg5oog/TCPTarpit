@@ -139,15 +139,24 @@ sub open_log {
     $log_fh->autoflush(1);
 }
 
-# newsyslog(8) sends SIGHUP after rotation (via the pid file): reopen
-# the log file so the daemon keeps logging into the new file.
+# newsyslog(8) rotates by renaming the file, creating a fresh one and
+# then sending SIGHUP (via the pid file): reopen the log so the daemon
+# keeps logging into the new file.  If the file does not exist at this
+# point it cannot be recreated here (unveil covers the file path, not
+# its directory), so the daemon degrades to stdout instead of losing
+# messages - one warning is emitted, nothing is silently dropped.
 sub reopen_log {
-    return unless $log_fh;
+    return unless length $config{log_file};
     my $path = $config{log_file};
-    unless (open($log_fh, '>>', $path)) {
-        warn "cannot reopen log file $path after SIGHUP: $!\n";
+    my $new_fh;
+    unless (open($new_fh, '>>', $path)) {
+        warn "cannot reopen log file $path after SIGHUP: $!"
+            . " - falling back to stdout until the file exists again\n";
+        $log_fh = undef;    # logmsg() prints to stdout from now on
         return;
     }
+    close($log_fh) if $log_fh;
+    $log_fh = $new_fh;
     $log_fh->autoflush(1);
     logmsg("[*] log file reopened after rotation\n");
 }
