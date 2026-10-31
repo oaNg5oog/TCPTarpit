@@ -120,10 +120,12 @@ Default:
 .Li 1800 .
 .It Ic max_per_source
 Maximum number of simultaneously held connections per source address;
-connections beyond the limit are closed immediately and logged as
-.Dq bot refused .
+connections beyond the limit are closed silently, without a log line,
+so that a hammering source cannot flood the log.
 .Li 0
-(the default) means unlimited.
+means unlimited.
+Default:
+.Li 5 .
 .It Ic stutter
 Seconds per dribbled filler byte, like
 .Xr spamd 8

@@ -25,10 +25,11 @@
 # max_age + cleanup_interval.
 #max_age=1800
 
-# Maximum simultaneously held connections per source address; further
-# connects from the same source are refused immediately (closed and
-# logged as "bot refused").  0 = unlimited.
-#max_per_source=0
+# Maximum simultaneously held connections per source address.
+# Further connects from the same source are closed silently (no log
+# line per refusal, so a hammering source cannot flood the log).
+# 0 = unlimited.
+#max_per_source=5
 
 # Stutter, like spamd(8): seconds per filler byte dribbled back to the
 # trapped client.  Keeps bots waiting for a real response; 0 disables

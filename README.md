@@ -92,7 +92,7 @@ upgrade:
 
 ```sh
 rm /usr/ports/packages/<arch>/all/tcptarpit-*.tgz
-PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.7
+PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.8
 ```
 
 The package does everything automatically, like other OpenBSD daemon
@@ -152,13 +152,13 @@ rcctl check  tcptarpit
 
 ### Option C: prebuilt package
 
-`dist/tcptarpit-1.4.7.tgz` is the package built and verified on
+`dist/tcptarpit-1.4.8.tgz` is the package built and verified on
 OpenBSD 8.0/amd64. pkg_add(1) can install it straight from the
 repository URL:
 
 ```sh
 pkg_add -D unsigned \
-    https://github.com/oaNg5oog/TCPTarpit/raw/v1.4.7/dist/tcptarpit-1.4.7.tgz
+    https://github.com/oaNg5oog/TCPTarpit/raw/v1.4.8/dist/tcptarpit-1.4.8.tgz
 ```
 
 Packages are specific to release and architecture - on anything but
@@ -179,7 +179,7 @@ daemons.
 | `listen_port`      | `8024`      | listen port; must match the `rdr-to` rules in pf.conf |
 | `cleanup_interval` | `1800`      | seconds between cleanup passes over stale connections |
 | `max_age`          | `1800`      | seconds before a held connection is closed with FIN |
-| `max_per_source`   | `0`         | held connections per source address; further connects are refused immediately; `0` = unlimited |
+| `max_per_source`   | `5`         | held connections per source address; further connects are closed silently; `0` = unlimited |
 | `stutter`          | `1`         | seconds per dribbled filler byte (spamd-style); `0` = pure silence |
 | `log_file`         | `/var/log/tcptarpit.log` | empty = stdout (syslog via daemon(8)) |
 | `pid_file`         | `/var/run/tcptarpit/tcptarpit.pid` | empty = no pid file |
@@ -352,9 +352,9 @@ pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
   `listen_ip6` empty. IPv6 traffic needs separate `inet6` pf rules
   with `rdr-to ::1`.
 * Aggressive parallel scanners can be capped per source with
-  `max_per_source` (default 0 = unlimited): beyond the limit the
-  connection is closed immediately and logged as
-  `[-] bot refused: IP (over max_per_source N)`.
+  `max_per_source` (default 5): beyond the limit the connection is
+  closed silently - a hammering source must not flood the log.
+  `0` = unlimited.
 * One process, one single-threaded event loop (`IO::Select`). Per
   connection cost: one file descriptor plus a small hash entry.
 * Incoming data is drained in 64 KiB chunks and discarded - a flooding

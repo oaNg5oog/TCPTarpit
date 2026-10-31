@@ -1,12 +1,13 @@
 tcptarpit - change history
 
-1.4.7 (2026-10-31)
-- per-source connection limit: max_per_source (default 0 =
+1.4.8 (2026-10-31)
+- per-source connection limit: max_per_source (default 5, 0 =
   unlimited) caps how many connections one source address may hold
-  simultaneously; further connects are closed immediately and logged
-  as "bot refused" (slots are released on every connection exit
-  path - verified on the same daemon instance). Asked for after an
-  aggressive scanner opened dozens of parallel connections.
+  simultaneously; further connects are closed silently - no log line
+  per refusal, so a hammering source cannot flood the log. Slots are
+  released on every connection exit path (verified on the same
+  daemon instance). Asked for after an aggressive scanner opened
+  dozens of parallel connections.
 - rc.d statistic command: /etc/rc.d/tcptarpit statistic shows the
   bots currently held by the daemon (netstat on the daemon port -
   the tarpit is the only listener there, so the ESTABLISHED foreign

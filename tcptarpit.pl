@@ -37,7 +37,7 @@ my %config = (
     listen_port      => 8024,
     cleanup_interval => 1800,    # seconds between cleanup passes
     max_age          => 1800,    # seconds before a connection is closed
-    max_per_source   => 0,       # held connections per source IP, 0 = unlimited
+    max_per_source   => 5,       # held connections per source IP, 0 = unlimited
     stutter          => 1,       # seconds per dribbled byte, 0 = pure silence
     log_file         => '/var/log/tcptarpit.log',   # empty = stdout/syslog
     pid_file         => '/var/run/tcptarpit/tcptarpit.pid',  # empty = none
@@ -414,12 +414,11 @@ while (1) {
                 }
                 # per-source connection limit: aggressive scanners open
                 # dozens of parallel connections; beyond the limit the
-                # connection is closed immediately instead of held
+                # connection is silently closed instead of held (no log
+                # line - a hammering source must not flood the log)
                 $per_ip{$ip} = ($per_ip{$ip} // 0) + 1;
                 if ($config{max_per_source} > 0
                     && $per_ip{$ip} > $config{max_per_source}) {
-                    logmsg("[-] bot refused: $ip (over max_per_source "
-                        . "$config{max_per_source})\n");
                     close($client);
                     $per_ip{$ip}--;
                     next;
