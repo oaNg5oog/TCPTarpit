@@ -343,6 +343,18 @@ established connections only (pf.conf(5): the 3-way handshake
 ensures the source is not spoofed). SYN-only scanners against closed
 ports are therefore not counted by max-src-conn-rate.
 
+Re-verified from scratch on OpenBSD 8.0 after sysupgrade (2026-10-31):
+ports tree 8.0 (the uid registry entry has to be re-added after every
+ports tree refresh), `make package` migrated the PLIST format
+automatically (`@version 15 -> @version 18`), install, rcctl
+lifecycle, pledge/unveil (ps: stdio,inet, uid 960) and the complete
+pf chain (overload -> table -> rdr -> trapped with real source IP ->
+hold duration -> delete restores service) all behave identically to
+7.9. Operational finding: with a stale `.tgz` from an older release
+still in the package repository, `make package` on 8.0 is a silent
+no-op ("package considered up to date") - remove the old tgz before
+rebuilding after a release upgrade.
+
 Still open:
 
 * The in-daemon root-to-user `setuid` branch (the package path runs
