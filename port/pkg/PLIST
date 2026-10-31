@@ -5,6 +5,8 @@
 @rcscript ${RCDIR}/tcptarpit
 bin/tcptarpit.pl
 @man man/man8/tcptarpit.8
+share/doc/pkg-readmes/tcptarpit
+@display share/doc/pkg-readmes/tcptarpit
 share/doc/tcptarpit/
 share/doc/tcptarpit/CHANGES
 share/examples/tcptarpit/

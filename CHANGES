@@ -1,5 +1,12 @@
 tcptarpit - change history
 
+1.2.1 (2026-10-31)
+- pkg-readme: the package installs the post-installation guide as
+  /usr/local/share/doc/pkg-readmes/tcptarpit (the OpenBSD convention
+  for package readmes) and displays it after installation via the
+  @display PLIST directive: enable/start, pf integration, config and
+  address management at a glance.
+
 1.2.0 (2026-10-31)
 - dedicated login class for the daemon: the package installs
   /etc/login.conf.d/tcptarpit (@sample, cap_mkdb runs automatically)

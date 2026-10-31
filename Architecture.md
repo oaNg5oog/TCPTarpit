@@ -229,6 +229,11 @@ at ~125 connections - found by the load test, not by reading. Since
   cap_mkdb after installation, and a second `@exec` applies
   `usermod -L tcptarpit` on upgrades (an existing user is left
   untouched by `@newuser`).
+* Package readme: `pkg/README` is installed as
+  `/usr/local/share/doc/pkg-readmes/tcptarpit` (stem without version,
+  like the base ports do) and printed by pkg_add after installation
+  via the `@display` PLIST directive - the admin sees enable/start,
+  pf integration and address management right after pkg_add.
 * The load test client needs its own raised limit (`ulimit -n 1024`)
   - both sides were capped at 128 during the first run.
 

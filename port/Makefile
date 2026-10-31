@@ -1,6 +1,6 @@
 COMMENT=	generic layer-4 TCP tarpit for abusive clients
 
-V=		1.2.0
+V=		1.2.1
 DISTNAME=	tcptarpit-${V}
 CATEGORIES=	net security
 
@@ -34,6 +34,9 @@ do-install:
 	${INSTALL_DATA_DIR} ${PREFIX}/share/doc/tcptarpit
 	${INSTALL_DATA} ${TCPTARPIT_SRCDIR}/CHANGES \
 		${PREFIX}/share/doc/tcptarpit/CHANGES
+	${INSTALL_DATA_DIR} ${PREFIX}/share/doc/pkg-readmes
+	${INSTALL_DATA} ${.CURDIR}/pkg/README \
+		${PREFIX}/share/doc/pkg-readmes/tcptarpit
 	${INSTALL_SCRIPT} ${TCPTARPIT_SRCDIR}/tcptarpit ${DESTDIR}${RCDIR}/tcptarpit
 
 .include <bsd.port.mk>

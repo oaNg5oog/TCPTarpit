@@ -1,0 +1,40 @@
+tcptarpit
+=========
+
+Post-installation steps.
+
+1. The unprivileged daemon user _tcptarpit and its login class
+   (/etc/login.conf.d/tcptarpit, openfiles 1024/4096) were created
+   and registered automatically.
+
+2. Enable and start the daemon:
+
+       rcctl enable tcptarpit
+       rcctl start tcptarpit
+
+   It listens on 127.0.0.1:8024 only and logs to /var/log/daemon
+   (facility daemon.info).
+
+3. pf(4) integration - without pf rules no traffic reaches the
+   tarpit.  Minimal /etc/pf.conf (adjust ext_if and ports):
+
+       ext_if = "vio0"
+       table <bruteforcers> persist
+       pass out on $ext_if proto { tcp, udp, icmp } all keep state
+       pass in quick on $ext_if proto tcp from <bruteforcers> \
+           to ($ext_if) port { http, https } rdr-to 127.0.0.1 port 8024
+       pass in on $ext_if proto tcp to ($ext_if) port { http, https } \
+           flags S/SA keep state \
+           (max-src-conn-rate 30/10, overload <bruteforcers> flush)
+
+   Then reload with: pfctl -f /etc/pf.conf
+
+4. Optional: configuration in /etc/tcptarpit.conf (listen_port,
+   max_age, log_file, pid_file, ...).  See tcptarpit(8).
+
+5. Managing caught addresses:
+
+       pfctl -t bruteforcers -T show
+       pfctl -t bruteforcers -T delete <ip>
+
+Further documentation: tcptarpit(8).

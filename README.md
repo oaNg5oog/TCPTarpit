@@ -131,15 +131,18 @@ rcctl check  tcptarpit
 
 ### Option C: prebuilt package
 
-`dist/tcptarpit-1.2.0.tgz` is the package built and verified on
+`dist/tcptarpit-1.2.1.tgz` is the package built and verified on
 OpenBSD 8.0/amd64. pkg_add(1) can install it straight from the
 repository URL (locally built packages are unsigned, hence
 `-D unsigned`):
 
 ```sh
 pkg_add -D unsigned \
-    https://github.com/oaNg5oog/TCPTarpit/raw/v1.2.0/dist/tcptarpit-1.2.0.tgz
+    https://github.com/oaNg5oog/TCPTarpit/raw/v1.2.1/dist/tcptarpit-1.2.1.tgz
 ```
+
+After installation pkg_add shows the post-installation guide; it
+stays available at `/usr/local/share/doc/pkg-readmes/tcptarpit`.
 
 Packages are specific to release and architecture - on anything but
 OpenBSD 8.0/amd64 build your own via the port (Option A).
