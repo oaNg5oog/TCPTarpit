@@ -31,20 +31,34 @@ it works for SSH brute forcers as well as HTTP scanners and dir busters.
 
 ### Option A: package via the port (recommended)
 
-Build and install directly from the repository (requires the OpenBSD
-ports tree, e.g. from the `ports.tar.gz` of your release):
+Building the package requires an OpenBSD machine with the ports tree
+installed (not present by default). One-time setup:
 
 ```sh
-cd port
+cd /tmp
+ftp https://cdn.openbsd.org/pub/OpenBSD/$(uname -r)/ports.tar.gz
+doas tar -xzf ports.tar.gz -C /usr
+```
+
+Check out this repository anywhere (the port may live outside
+`/usr/ports`: the base system file `/usr/share/mk/bsd.port.mk` includes
+the real port logic from `PORTSDIR`, which defaults to `/usr/ports`),
+then build and install in one step:
+
+```sh
+git clone https://github.com/oaNg5oog/TCPTarpit.git
+cd TCPTarpit/port
 doas make install
 ```
 
-Or build a `.tgz` package first and install it with pkg_add(1) on this
-or another OpenBSD machine of the same release and architecture:
+Or build a `.tgz` package first - installable with pkg_add(1) on this or
+another OpenBSD machine of the same release and architecture:
 
 ```sh
-cd port
-make package          # path of the .tgz is printed at the end
+cd TCPTarpit/port
+make package
+# the path of the tgz is printed at the end, by default:
+#   /usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
 doas pkg_add /usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
 ```
 
@@ -62,6 +76,16 @@ packages:
 `pkg_delete tcptarpit` removes files and configuration again
 (configuration only if unchanged); add `-c` to also remove the
 `_tcptarpit` user and group.
+
+Quick check after installation:
+
+```sh
+id _tcptarpit
+ls -l /etc/rc.d/tcptarpit /etc/tcptarpit.conf
+rcctl enable tcptarpit && rcctl start tcptarpit
+rcctl check tcptarpit
+tail -f /var/log/daemon     # expect: "generic layer-4 TCP tarpit running ..."
+```
 
 ### Option B: manual installation
 
