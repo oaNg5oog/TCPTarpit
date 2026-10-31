@@ -176,14 +176,28 @@ my (@idle, $t0, $s1);
 # ---------------------------------------------------------------- phase 3
 {
     my $st = $dpid ? stats($dpid) : undef;
+    # connect with one retry; the tight localhost loop occasionally
+    # collides with a TIME_WAIT source port on the client side, which
+    # is a client artifact, not daemon behaviour - but the reason is
+    # collected and printed so it can never hide a real failure
+    my %errors;
+    my $connect_retry = sub {
+        for my $attempt (1 .. 2) {
+            my $s = connect_one();
+            return $s if $s;
+            $errors{$!}++;
+            select(undef, undef, undef, 0.05) if $attempt == 1;
+        }
+        return undef;
+    };
     my $fin_ok = 0;
     for (1 .. 1000) {
-        my $s = connect_one();
+        my $s = $connect_retry->();
         if ($s) { syswrite($s, 'x'); close $s; $fin_ok++ }
     }
     my $rst_ok = 0;
     for (1 .. 500) {
-        my $s = connect_one();
+        my $s = $connect_retry->();
         if ($s) { syswrite($s, 'x'); rst_close($s); $rst_ok++ }
     }
     sleep 3;
@@ -191,6 +205,10 @@ my (@idle, $t0, $s1);
     my $cpu_ok = !$st2 || ($st2->{cpu} - $st->{cpu}) <= $limits{churn};
     my $detail = sprintf('churn: %d FIN + %d RST', $fin_ok, $rst_ok);
     $detail .= sprintf(', cpu +%ds', $st2->{cpu} - $st->{cpu}) if $st2;
+    if (%errors) {
+        $detail .= '; connect errors: '
+            . join(', ', map { "$_ ($errors{$_}x)" } sort keys %errors);
+    }
     verdict('churn', $fin_ok + $rst_ok == 1500 && $cpu_ok && daemon_alive(),
         $detail);
     sleep 2;
