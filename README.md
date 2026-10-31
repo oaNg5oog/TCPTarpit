@@ -132,11 +132,11 @@ the default 128 fd soft limit:
 
 ```sh
 groupadd -g 960 _tcptarpit
-useradd -g _tcptarpit -L tcptarpit -c "tcctarpit daemon" \
+useradd -g _tcptarpit -L tcptarpit -c "tcptarpit daemon" \
     -d /nonexistent -s /sbin/nologin _tcptarpit
 install -m 0644 tcptarpit.login.conf /etc/login.conf.d/tcptarpit
 cap_mkdb /etc/login.conf.d/tcptarpit
-install -d -o _tcctarpit -g _tcptarpit /var/run/tcptarpit
+install -d -o _tcptarpit -g _tcptarpit /var/run/tcptarpit
 install -o _tcptarpit -g _tcptarpit -m 0640 /dev/null /var/log/tcptarpit.log
 echo '/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid' >> /etc/newsyslog.conf
 
@@ -375,7 +375,7 @@ Runtime-verified on a development machine (Linux, perl 5.36) and on
   disable explicitly). Same-version pkg_add is a silent no-op - use
   pkg_delete first or `-r`.
 * **Daemon runtime** (7.9 and 8.0): rcctl lifecycle all ok, automatic
-  `_tcctarpit` user/group/login class, pledge(2) and unveil(2) active
+  `_tcptarpit` user/group/login class, pledge(2) and unveil(2) active
   (`ps -o pledge` shows the promised set, uid/gid 960), clean
   shutdowns (after the rpath fix), IPv4 and IPv6 listeners by default,
   spamd-style stutter with readable hold durations in every log line.
@@ -411,7 +411,7 @@ Installed as a package:
 
 ```sh
 rcctl stop tcptarpit
-rcctl disable tcctarpit
+rcctl disable tcptarpit
 doas pkg_delete tcptarpit          # add -c to also remove _tcptarpit
 # optionally remove the marked newsyslog block and the log:
 # editor /etc/newsyslog.conf; rm /var/log/tcptarpit.log*
@@ -420,7 +420,7 @@ doas pkg_delete tcptarpit          # add -c to also remove _tcptarpit
 Manual installation:
 
 ```sh
-rcctl stop    tcctarpit
+rcctl stop    tcptarpit
 rcctl disable tcptarpit
 rm /usr/local/bin/tcptarpit.pl /etc/rc.d/tcptarpit \
    /etc/tcptarpit.conf /etc/login.conf.d/tcptarpit \
