@@ -18,7 +18,8 @@ use warnings;
 use IO::Socket::IP;
 use IO::Select;
 use IO::Handle;
-use POSIX qw(setgid setuid);
+use POSIX qw(setgid setuid strftime);
+use Sys::Hostname qw(hostname);
 use Errno qw(EAGAIN EWOULDBLOCK EINTR ECONNABORTED EMFILE ENFILE);
 use File::Basename qw(dirname);
 
@@ -132,12 +133,20 @@ sub validate_config {
 }
 
 # All daemon messages go through logmsg().  With log_file unset, output
-# goes to stdout, which daemon(8) pipes to syslog (daemon.info).  With
-# log_file set, output is appended to that file instead.
+# goes to stdout, which daemon(8) pipes to syslog (daemon.info) - syslogd
+# adds timestamp, host and tag.  With log_file set, output is appended to
+# that file instead and the daemon writes the same syslog-style header
+# itself ("Oct 31 20:10:02 host tcptarpit[123]: ..."), so the file stays
+# syslog-conform and sortable next to /var/log/daemon.
+my $hostname = hostname();
+
 sub logmsg {
     my ($msg) = @_;
-    if ($log_fh) { print $log_fh $msg }
-    else         { print $msg }
+    if ($log_fh) {
+        my $ts = strftime("%b %e %H:%M:%S", localtime);
+        print $log_fh "$ts $hostname tcptarpit[$$]: $msg";
+    }
+    else { print $msg }
 }
 
 sub open_log {

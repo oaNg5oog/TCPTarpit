@@ -1,5 +1,12 @@
 tcptarpit - change history
 
+1.4.6 (2026-10-31)
+- file logging is now syslog-conform: in file mode every line gets
+  the standard header "Oct 31 20:10:02 host tcptarpit[pid]:" (the
+  daemon writes it itself because the file bypasses syslogd; found
+  on the first production deployment). Stdout/syslog mode keeps the
+  bare lines - daemon(8) and syslogd add the header there.
+
 1.4.5 (2026-10-31)
 - fix startup failure after installs where /var/log/tcptarpit.log or
   /var/run/tcptarpit already existed with wrong ownership: the daemon
