@@ -29,8 +29,8 @@ my %config = (
     cleanup_interval => 1800,    # seconds between cleanup passes
     max_age          => 1800,    # seconds before a connection is closed
     stutter          => 1,       # seconds per dribbled byte, 0 = pure silence
-    log_file         => '',      # empty = stdout (syslog via daemon(8))
-    pid_file         => '',      # empty = no pid file
+    log_file         => '/var/log/tcptarpit.log',   # empty = stdout/syslog
+    pid_file         => '/var/run/tcptarpit/tcptarpit.pid',  # empty = none
     user             => '',      # empty = no privilege drop
     group            => '',      # empty = primary group of user
 );
