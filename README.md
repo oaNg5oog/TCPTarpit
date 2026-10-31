@@ -7,8 +7,11 @@ overload offending source addresses into a table, and a `rdr-to` rule
 diverts their connections to a loopback listener. Like spamd the daemon
 stutters by default: incoming data is read and discarded, and a single
 filler byte is dribbled back per connection per second, so clients keep
-waiting for a response that never properly arrives. Pure silence is
-available via `stutter=0`.
+waiting for a response that never properly arrives. Parallel scanners
+are capped per source: at most five connections per address are held
+at a time (`max_per_source`), everything beyond is closed silently.
+Pure silence is available via `stutter=0`, unlimited parallel holds
+via `max_per_source=0`.
 
 The attacker's client sits there waiting, wasting its time and its
 connection slots. The daemon is protocol agnostic: it works for SSH

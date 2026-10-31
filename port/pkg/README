@@ -31,10 +31,16 @@ Post-installation steps.
    Then reload with: pfctl -f /etc/pf.conf
 
 4. Optional: configuration in /etc/tcptarpit.conf (listen_port,
-   max_age, log_file, pid_file, ...).  IPv4 and IPv6 listeners are
-   both on by default (127.0.0.1 and ::1) and individually
+   max_age, max_per_source, stutter, ...).  IPv4 and IPv6 listeners
+   are both on by default (127.0.0.1 and ::1) and individually
    switchable; IPv6 traffic needs the inet6 pf rules shown in
-   tcptarpit(8).
+   tcptarpit(8).  At most five connections per source address are
+   held (max_per_source), further ones are closed silently.
+
+   Runtime statistics (who is trapped right now, counters, top
+   sources, hold times):
+
+       /etc/rc.d/tcptarpit statistic
 
 5. Managing caught addresses:
 

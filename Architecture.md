@@ -210,6 +210,22 @@ sends that signal to the pid listed in `pid_file`
 `SIGPIPE` is ignored so a broken syslog pipe cannot kill the daemon;
 `SIGTERM`/`SIGINT` remove the pid file and exit.
 
+## Per-source connection limit
+
+Aggressive scanners open dozens of parallel connections (observed in
+production: one source, 20+ connects within seconds). `max_per_source`
+(default 5, 0 = unlimited) caps the simultaneously held connections
+per source address:
+
+* the counter is incremented on accept; beyond the limit the socket
+  is closed immediately and silently - no log line per refusal, so a
+  hammering source cannot flood the log
+* slots are released on every exit path (clean close, RST, stutter
+  write abort, hold-time kick); release was verified on the same
+  daemon instance (close all, connect again, allowed in again)
+* v4 and v6 addresses are counted separately (they are distinct
+  strings), which matches the separate pf rules per family
+
 ## Stutter mode
 
 Since 1.3.0 the daemon dribbles one filler byte per connection per
