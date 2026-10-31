@@ -148,10 +148,13 @@ if ($base) {
         my $t0 = time;
         while (time - $t0 < 4) {
             vec(my $rin = '', fileno($s), 1) = 1;
-            select($rin, undef, undef, 4);
-            my $n = sysread($s, my $b, 64);
-            last unless $n;
-            $bytes += $n;
+            # only read when select signalled readability - a blocking
+            # read would hang forever against a silent daemon
+            if (select($rin, undef, undef, 4) > 0) {
+                my $n = sysread($s, my $b, 64);
+                last unless $n;
+                $bytes += $n;
+            }
         }
         close $s;
     }
