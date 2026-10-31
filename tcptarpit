@@ -2,15 +2,11 @@
 
 # tcptarpit rc.d(8) script -- installed by the package as /etc/rc.d/tcptarpit
 # and enabled with: rcctl enable tcptarpit && rcctl start tcptarpit
+#
+# Custom command:
+#   /etc/rc.d/tcptarpit statistic    currently held bots, counters,
+#                                    top sources and hold-time stats
 
-# Interpreted daemon: run the interpreter with the script as a flag.
-# rc.subr(8) always rebuilds pexp from daemon + daemon_flags (verified
-# on OpenBSD 7.9: "pexp=\"$(eval echo ${daemon}${daemon_flags:+ ...})\"",
-# custom pexp values are overwritten), so this way both the start
-# command and pexp become "/usr/bin/perl /usr/local/bin/tcptarpit.pl"
-# and match the process list.  Additional flags (e.g. an alternative
-# config file) must keep the script path:
-#   rcctl set tcptarpit flags "/usr/local/bin/tcptarpit.pl /etc/x.conf"
 daemon="/usr/bin/perl"
 daemon_flags="/usr/local/bin/tcptarpit.pl"
 
@@ -22,7 +18,85 @@ daemon_logger="daemon.info"
 # installations create it first, see README.md.
 daemon_user="_tcptarpit"
 
+# statistic command default; the log location and port are also read
+# from /etc/tcptarpit.conf, overridable from /etc/rc.conf.local via
+#   tcptarpit_stat_log=/var/log/tcptarpit.log
+tcptarpit_stat_log=/var/log/tcptarpit.log
+
 . /etc/rc.d/rc.subr
+
+extra_commands="statistic"
+statistic_cmd=tcptarpit_statistic
+
+# /etc/rc.d/tcptarpit statistic -- who is trapped RIGHT NOW (the daemon
+# is the only listener on its port, so netstat shows exactly the held
+# bots with their original addresses), plus counters, top sources and
+# the hold-time distribution from the daemon log.
+tcptarpit_statistic() {
+	local log port _v
+
+	log=$tcptarpit_stat_log
+	port=8024
+
+	# log location and port are configurable in /etc/tcptarpit.conf
+	if [ -f /etc/tcptarpit.conf ]; then
+		_v=$(sed -n 's/^[[:space:]]*log_file[[:space:]]*=[[:space:]]*//p' \
+			/etc/tcptarpit.conf)
+		[ -n "$_v" ] && log=$_v
+		_v=$(sed -n 's/^[[:space:]]*listen_port[[:space:]]*=[[:space:]]*//p' \
+			/etc/tcptarpit.conf)
+		[ -n "$_v" ] && port=$_v
+	fi
+
+	echo "tcptarpit statistics"
+	echo ""
+	echo "  currently held:"
+	netstat -n -p tcp | awk -v p="\\.$port\$" \
+		'$6 == "ESTABLISHED" && $4 ~ p { print $5 }' \
+		| sed 's/\.[^.]*$//' | sort | uniq -c | sort -rn \
+		| awk '{ printf("    %s connection(s) from %s\n", $1, $2) }'
+	echo ""
+
+	if [ ! -r "$log" ]; then
+		echo "  log file not readable: $log"
+		return 1
+	fi
+
+	echo "  trapped:  $(grep -c 'bot trapped' $log)"
+	echo "  gave up:  $(grep -c 'bot gave up' $log)"
+	echo "  aborted:  $(grep -c 'bot aborted' $log)"
+	echo "  kicked:   $(grep -c 'kicking bot' $log)"
+	echo ""
+	echo "  top sources:"
+	grep 'bot trapped' $log | awk '{print $NF}' | cut -d: -f1 \
+		| sort | uniq -c | sort -rn | head -10 | sed 's/^/    /'
+	echo ""
+	echo "  hold times (seconds):"
+	awk '/bot gave up after|bot aborted after/ {
+		if (match($0, /after [^:]*:/)) {
+			s = substr($0, RSTART + 6, RLENGTH - 7)
+			t = 0
+			n = split(s, w, /[ ]+/)
+			for (i = 1; i <= n; i++) {
+				if (w[i] ~ /^[0-9]+$/)
+					v = w[i]
+				else if (w[i] == "s")   t += v
+				else if (w[i] == "min") t += v * 60
+				else if (w[i] == "h")   t += v * 3600
+				else if (w[i] == "d")   t += v * 86400
+			}
+			print t
+		}
+	}' $log | sort -n | awk '
+		{ a[NR] = $1 }
+		END {
+			if (NR > 0)
+				printf("    min: %d  median: %d  max: %d  n: %d\n", \
+				    a[1], a[int((NR + 1) / 2)], a[NR], NR)
+			else
+				print "    no completed holds yet"
+		}'
+}
 
 rc_reload=NO
 rc_bg=YES
