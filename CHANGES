@@ -1,5 +1,11 @@
 tcptarpit - change history
 
+1.4.1 (2026-10-31)
+- documentation overhaul: README brought up to the state of 1.4.0
+  (stutter and IPv6 defaults, file logging with newsyslog rotation,
+  login class, pkg-readme, pledge rpath/unveil cr findings, both
+  tested releases 7.9 and 8.0). No daemon code changes.
+
 1.4.0 (2026-10-31)
 - file logging is now the default: log_file defaults to
   /var/log/tcptarpit.log and pid_file to

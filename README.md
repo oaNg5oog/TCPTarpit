@@ -1,45 +1,56 @@
 # tcptarpit - generic layer-4 TCP tarpit for OpenBSD
 
-`tcptarpit` is a small single-process daemon for OpenBSD that traps abusive
-TCP clients in a connection that never yields a real answer. It follows the
-same pf pattern as OpenBSD's own spamd(8): pf rate rules overload offending
-source addresses into a table, and a `rdr-to` rule diverts their connections
-to a loopback listener. Like spamd the daemon stutters by default: incoming
-data is read and discarded, and a single filler byte is dribbled back per
-connection per second, so clients keep waiting for a response that never
-properly arrives. Pure silence is available via `stutter=0`.
+`tcptarpit` is a small single-process daemon for OpenBSD that traps
+abusive TCP clients in a connection that never yields a real answer. It
+follows the same pf pattern as OpenBSD's own spamd(8): pf rate rules
+overload offending source addresses into a table, and a `rdr-to` rule
+diverts their connections to a loopback listener. Like spamd the daemon
+stutters by default: incoming data is read and discarded, and a single
+filler byte is dribbled back per connection per second, so clients keep
+waiting for a response that never properly arrives. Pure silence is
+available via `stutter=0`.
 
-The attacker's client sits there waiting for a response that never comes,
-wasting its time and its connection slots. The daemon is protocol agnostic:
-it works for SSH brute forcers as well as HTTP scanners and dir busters.
+The attacker's client sits there waiting, wasting its time and its
+connection slots. The daemon is protocol agnostic: it works for SSH
+brute forcers as well as HTTP scanners and dir busters.
 
 > This repository is developed on an internal Gitea instance and
 > automatically published to GitHub through a push mirror.
 
 ## Files
 
-| File                  | Install to                        | Mode | Purpose                            |
-|-----------------------|-----------------------------------|------|------------------------------------|
-| `tcptarpit.pl`        | `/usr/local/bin/tcptarpit.pl`     | 0755 | the daemon (base perl, no ports)   |
-| `tcptarpit`           | `/etc/rc.d/tcptarpit`             | 0555 | rc.d(8) start/stop integration     |
-| `tcptarpit.conf.sample` | `/etc/tcptarpit.conf`           | 0644 | configuration (copy and edit)      |
-| `tcptarpit.login.conf` | `/etc/login.conf.d/tcptarpit`   | 0644 | login class for the daemon user    |
-| `tcptarpit.8`         | `/usr/local/man/man8/tcptarpit.8` | 0444 | manual page in mdoc(7) format      |
-| `port/`               | -                                 | -    | OpenBSD port skeleton (see below)  |
-| `tests/`              | -                                 | -    | load and resource test suite       |
+| File                  | Install to / purpose              | Mode   |
+|-----------------------|-----------------------------------|--------|
+| `tcptarpit.pl`        | `/usr/local/bin/tcptarpit.pl` - the daemon (base perl, no ports) | 0755 |
+| `tcptarpit`           | `/etc/rc.d/tcptarpit` - rc.d(8) integration | 0555 |
+| `tcptarpit.conf.sample` | `/etc/tcptarpit.conf` - configuration | 0644 |
+| `tcptarpit.login.conf` | `/etc/login.conf.d/tcptarpit` - login class | 0644 |
+| `tcptarpit.8`         | `/usr/local/man/man8/tcptarpit.8` - mdoc(7) manual page | 0444 |
+| `LICENCE`             | ISC licence                       | -      |
+| `CHANGES`             | change history (installed under `share/doc/tcptarpit/`) | - |
+| `port/`               | OpenBSD port skeleton             | -      |
+| `tests/`              | load and resource test suite      | -      |
+| `dist/`               | prebuilt package (see Option C)   | -      |
 
 ## Requirements
 
-* OpenBSD with pf enabled (the default).
-* Base system perl (`/usr/bin/perl`). No packages or CPAN modules needed -
-  the daemon only uses `IO::Socket::INET` and `IO::Select`, both core.
+* OpenBSD with pf enabled (the default). Verified on OpenBSD **7.9 and
+  8.0** (amd64); the login class packaging requires the
+  `/etc/login.conf.d/` mechanism.
+* Base system perl (`/usr/bin/perl`). No packages or CPAN modules -
+  the daemon uses `IO::Socket::IP` (dual-stack, IPv4 and IPv6) and
+  `IO::Select`, both part of the base perl.
 
 ## Installation
 
+`rcctl enable tcptarpit` appends the service to `pkg_scripts` in
+`rc.conf.local`; at boot /etc/rc runs every `pkg_scripts` entry that is
+executable in `/etc/rc.d`.
+
 ### Option A: package via the port (recommended)
 
-Building the package requires an OpenBSD machine with the ports tree
-installed (not present by default). One-time setup:
+Building requires an OpenBSD machine with the ports tree (not present
+by default). One-time setup:
 
 ```sh
 cd /tmp
@@ -48,83 +59,91 @@ doas tar -xzf ports.tar.gz -C /usr
 ```
 
 The port must be built from inside the ports tree: bsd.port.mk derives
-PKGPATH from the directory and refuses to build elsewhere ("Can't find
-... under PORTSDIR_PATH=/usr/ports:/usr/ports/mystuff"). The tree
+PKGPATH from the directory and refuses to build elsewhere. The tree
 `/usr/ports/mystuff` is the designated place for local ports:
 
 ```sh
 git clone https://github.com/oaNg5oog/TCPTarpit.git
 mkdir -p /usr/ports/mystuff/net
-cp -R TCPTarpit/port /usr/ports/mystuff/net/tcptarpit
+cp -R TCCTarpit/port /usr/ports/mystuff/net/tcptarpit
 cd /usr/ports/mystuff/net/tcptarpit
 make package TCPTARPIT_SRCDIR=/root/projects/TCPTarpit
 ```
 
-`TCPTARPIT_SRCDIR` points the build at the repository files (daemon,
-rc script, man page, config sample). Or build and install in one step
-with `doas make install TCPTARPIT_SRCDIR=...`.
+`TCPTARPIT_SRCDIR` points the build at the repository files. Or build
+and install in one step: `doas make install TCPTARPIT_SRCDIR=...`.
 
 One more one-time step: pkg_create(1) refuses `@newuser`/`@newgroup`
 entries whose uid/gid are not in the ports registry, so register the
-daemon uid locally (for an official port, the id would be claimed with
-ports@ instead):
+daemon uid locally (for an official port the id would be claimed with
+ports@ instead). This has to be repeated after every ports tree
+refresh:
 
 ```sh
 echo "960 _tcptarpit _tcptarpit net/tcptarpit" \
     >> /usr/ports/infrastructure/db/user.list
 ```
 
-The path of the built `.tgz` is printed at the end, by default
-`/usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz`. Locally built
-packages are unsigned; since OpenBSD 7.x pkg_add(1) needs an explicit
-acknowledgment for them (verified on 7.9):
+Locally built packages are unsigned; pkg_add(1) needs an explicit
+acknowledgment for them (verified on 7.9 and 8.0). With a stale tgz of
+an older release in the package repository `make package` is a silent
+no-op on 8.0 - remove the old tgz before rebuilding after a release
+upgrade:
 
 ```sh
-pkg_add -D unsigned /usr/ports/packages/<arch>/all/tcptarpit-1.0.tgz
+rm /usr/ports/packages/<arch>/all/tcptarpit-*.tgz
+PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.4.1
 ```
 
 The package does everything automatically, like other OpenBSD daemon
 packages:
 
-* creates the group and user `_tcptarpit` (`@newgroup`/`@newuser` in
-  `port/pkg/PLIST`; uid/gid 960, see the comment there on collisions),
+* creates the group and user `_tcptarpit` (`@newgroup`/`@newuser`,
+  uid/gid 960, login class `tcptarpit` assigned through the loginclass
+  field; upgrades get `usermod -L` via `@exec`),
+* installs the login class `/etc/login.conf.d/tcptarpit`
+  (openfiles 1024/4096) and registers it with cap_mkdb(1),
 * installs the rc.d(8) script into `/etc/rc.d/tcptarpit` (`@rcscript`),
 * installs `/etc/tcptarpit.conf` from the sample on first install and
-  leaves an existing configuration untouched (`@sample`),
-* the rc script runs the daemon as `_tcptarpit` (`daemon_user`), so no
-  root privileges are ever needed at runtime.
-
-`pkg_delete tcptarpit` removes files and configuration again
-(configuration only if unchanged); add `-c` to also remove the
-`_tcptarpit` user and group.
+  never touches an existing configuration (`@sample`),
+* creates `/var/log/tcptarpit.log` (owned by `_tcptarpit`, 0640) and
+  `/var/run/tcptarpit/` for the pid file, and appends an idempotent
+  newsyslog(8) rotation entry to `/etc/newsyslog.conf`,
+* prints the post-installation guide after installation; it stays at
+  `/usr/local/share/doc/pkg-readmes/tcptarpit`,
+* the rc script runs the daemon as `_tcptarpit` (`daemon_user`) - no
+  root privileges at runtime.
 
 Quick check after installation:
 
 ```sh
 id _tcptarpit
-ls -l /etc/rc.d/tcptarpit /etc/tcptarpit.conf
+ls -l /etc/rc.d/tcptarpit /etc/tcptarpit.conf /etc/login.conf.d/tcptarpit
 rcctl enable tcptarpit && rcctl start tcptarpit
 rcctl check tcptarpit
-tail -f /var/log/daemon     # expect: "generic layer-4 TCP tarpit running ..."
+tail -f /var/log/tcptarpit.log   # expect: "generic layer-4 TCP tarpit running ..."
 ```
 
 ### Option B: manual installation
 
-Create the daemon user first - the rc script expects it:
+Create the daemon user with its login class first - the rc script
+expects the user, and without the class the daemon stops accepting at
+the default 128 fd soft limit:
 
 ```sh
 groupadd -g 960 _tcptarpit
-useradd -g _tcptarpit -c "tcptarpit daemon" \
+useradd -g _tcptarpit -L tcptarpit -c "tcctarpit daemon" \
     -d /nonexistent -s /sbin/nologin _tcptarpit
-```
+install -m 0644 tcptarpit.login.conf /etc/login.conf.d/tcptarpit
+cap_mkdb /etc/login.conf.d/tcptarpit
+install -d -o _tcctarpit -g _tcptarpit /var/run/tcptarpit
+install -o _tcptarpit -g _tcptarpit -m 0640 /dev/null /var/log/tcptarpit.log
+echo '/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid' >> /etc/newsyslog.conf
 
-Then install the files:
-
-```sh
-install -m 0755 tcptarpit.pl         /usr/local/bin/tcptarpit.pl
-install -m 0555 tcptarpit            /etc/rc.d/tcptarpit
+install -m 0755 tcptarpit.pl          /usr/local/bin/tcptarpit.pl
+install -m 0555 tcptarpit             /etc/rc.d/tcptarpit
 install -m 0644 tcptarpit.conf.sample /etc/tcptarpit.conf
-install -m 0444 tcptarpit.8          /usr/local/man/man8/tcptarpit.8
+install -m 0444 tcptarpit.8           /usr/local/man/man8/tcptarpit.8
 
 rcctl enable tcptarpit
 rcctl start  tcptarpit
@@ -133,33 +152,25 @@ rcctl check  tcptarpit
 
 ### Option C: prebuilt package
 
-`dist/tcptarpit-1.3.0.tgz` is the package built and verified on
+`dist/tcptarpit-1.4.1.tgz` is the package built and verified on
 OpenBSD 8.0/amd64. pkg_add(1) can install it straight from the
-repository URL (locally built packages are unsigned, hence
-`-D unsigned`):
+repository URL:
 
 ```sh
 pkg_add -D unsigned \
-    https://github.com/oaNg5oog/TCPTarpit/raw/v1.3.0/dist/tcptarpit-1.3.0.tgz
+    https://github.com/oaNg5oog/TCPTarpit/raw/v1.4.1/dist/tcptarpit-1.4.1.tgz
 ```
-
-After installation pkg_add shows the post-installation guide; it
-stays available at `/usr/local/share/doc/pkg-readmes/tcptarpit`.
 
 Packages are specific to release and architecture - on anything but
 OpenBSD 8.0/amd64 build your own via the port (Option A).
 
-`rcctl enable` appends `tcptarpit` to `pkg_scripts` in `rc.conf.local`;
-at boot /etc/rc runs every `pkg_scripts` entry that is executable in
-`/etc/rc.d`. All daemon output goes to syslog at `daemon.info`, i.e.
-`/var/log/daemon`, through daemon(8).
-
 ## Configuration
 
-The daemon reads `/etc/tcptarpit.conf`. If the file is missing it logs a
-warning and continues with built-in defaults. A malformed file (unknown
-key, syntax error, invalid value) aborts startup with a `file:line`
-message, following the fail-fast convention of OpenBSD daemons.
+The daemon reads `/etc/tcptarpit.conf`. If the file is missing it logs
+a warning and continues with built-in defaults. A malformed file
+(unknown key, syntax error, invalid value) aborts startup with a
+`file:line` message, following the fail-fast convention of OpenBSD
+daemons.
 
 | Key                | Default     | Meaning                                          |
 |--------------------|-------------|--------------------------------------------------|
@@ -168,16 +179,16 @@ message, following the fail-fast convention of OpenBSD daemons.
 | `listen_port`      | `8024`      | listen port; must match the `rdr-to` rules in pf.conf |
 | `cleanup_interval` | `1800`      | seconds between cleanup passes over stale connections |
 | `max_age`          | `1800`      | seconds before a held connection is closed with FIN |
-| `stutter`         | `1`        | seconds per dribbled filler byte (spamd-style stutter); `0` = pure silence |
+| `stutter`          | `1`         | seconds per dribbled filler byte (spamd-style); `0` = pure silence |
 | `log_file`         | `/var/log/tcptarpit.log` | empty = stdout (syslog via daemon(8)) |
 | `pid_file`         | `/var/run/tcptarpit/tcptarpit.pid` | empty = no pid file |
 | `user`             | *(empty)*   | drop privileges to this user after startup (see below) |
 | `group`            | *(empty)*   | drop group; empty = primary group of `user` |
 
-A different configuration file can be passed as the only command line
-argument, e.g. for tests.  Because the rc script runs the interpreter
-with the script path as its first flag (see the comment in
-`/etc/rc.d/tcptarpit`), overriding the flags must keep that path:
+At least one listen address must remain set (fail-fast otherwise). A
+different configuration file can be passed as the only command line
+argument; when overriding the rc flags, keep the script path (see the
+comment in `/etc/rc.d/tcptarpit`):
 
 ```sh
 rcctl set tcptarpit flags "/usr/local/bin/tcptarpit.pl /etc/tcptarpit-test.conf"
@@ -185,112 +196,87 @@ rcctl set tcptarpit flags "/usr/local/bin/tcptarpit.pl /etc/tcptarpit-test.conf"
 
 ## Logging
 
-Since 1.4.0 the default is a dedicated log file,
-`/var/log/tcptarpit.log` - the syslog route (`/var/log/daemon`)
-stays clean that way. The package prepares everything automatically:
-
-* creates `/var/log/tcptarpit.log` owned by `_tcptarpit` (0640)
-* creates `/var/run/tcptarpit/` for the pid file
-* appends an idempotent rotation entry to `/etc/newsyslog.conf`
-  (`640 7 250 * Z`, signaling the pid file)
+The default is a dedicated log file, `/var/log/tcptarpit.log` - the
+syslog route (`/var/log/daemon`) stays clean that way. The package
+creates the file with suitable ownership, the run directory for the
+pid file and the newsyslog(8) rotation entry (verified: a complete
+load test left `/var/log/daemon` byte-for-byte unchanged).
 
 On SIGHUP - sent by newsyslog(8) after rotation - the daemon reopens
-its log file. Verify by hand:
-
-```sh
-mv /var/log/tcptarpit.log /var/log/tcptarpit.log.0
-kill -HUP $(cat /var/run/tcptarpit/tcptarpit.pid)
-```
+its log file. If the file does not exist at that moment it cannot be
+recreated under unveil, so the daemon degrades to stdout with one
+warning (nothing is silently dropped) and returns to the file on the
+next SIGHUP as soon as it exists again.
 
 Setting `log_file` empty switches back to stdout, which daemon(8)
-pipes to syslog at `daemon.info`. Manual installations (Option B)
-create the file and the rotation entry themselves:
-
-```sh
-install -d -o _tcptarpit -g _tcptarpit /var/run/tcptarpit
-install -o _tcptarpit -g _tcptarpit -m 0640 /dev/null /var/log/tcptarpit.log
-echo '/var/log/tcptarpit.log _tcptarpit:_tcptarpit 640 7 250 * Z /var/run/tcptarpit/tcptarpit.pid' >> /etc/newsyslog.conf
-```
+pipes to syslog at `daemon.info`.
 
 ## Running unprivileged
 
 Port 8024 needs no root, and the daemon never needs root after
-startup. The shipped rc script already contains
-`daemon_user="_tcptarpit"`, so with the package (or a manual install
-that created the user as shown above) the daemon starts unprivileged
-from the beginning - nothing to do.
+startup. The shipped rc script contains `daemon_user="_tcptarpit"`, so
+the daemon starts unprivileged from the beginning. Without the login
+class (openfiles 1024/4096) the daemon stops accepting at ~125
+connections - found by the load test, fixed by the packaged class.
 
-Since 1.2.0 the package also installs a dedicated login class
-`/etc/login.conf.d/tcptarpit` (openfiles-cur=1024, openfiles-max=4096),
-registers it with cap_mkdb(1) automatically and assigns it to the
-`_tcptarpit` user. Without the class the daemon stops accepting new
-connections at the default 128 fd soft limit (verified by the load
-test) - on manual installations create the class yourself:
-
-```sh
-install -m 0644 tcptarpit.login.conf /etc/login.conf.d/tcptarpit
-cap_mkdb /etc/login.conf.d/tcptarpit
-usermod -L tcptarpit _tcptarpit
-```
-
-The in-daemon alternative is the privilege drop via configuration: set
-`user=_tcptarpit` (optionally `group=`) in `/etc/tcptarpit.conf`. The
-daemon opens the listen socket, log file and pid file first, then
-switches uid/gid before entering the event loop. If it is already
-running as that user the drop is a no-op; switching to another user
-without root aborts startup.
+The in-daemon alternative is the privilege drop via configuration:
+`user=_tcptarpit` (optionally `group=`). The daemon opens the listen
+sockets, log file and pid file first, then switches uid/gid before
+entering the event loop. If it is already running as that user the
+drop is a no-op; switching to another user without root aborts
+startup.
 
 ## Security: pledge(2) and unveil(2)
 
 Like any OpenBSD-conformant daemon, tcptarpit restricts itself after
 startup with the OpenBSD kernel security mechanisms, in this order:
 
-1. **unveil(2)** reduces the filesystem view to the paths the daemon
-   still touches after startup: the log file (`wc`, reopen on SIGHUP
-   after newsyslog rotation) and the pid file directory (`wc`, unlink
-   on exit). With neither `log_file` nor `pid_file` configured, unveils
-   are locked immediately and the daemon has no filesystem access at
-   all - it is a pure network service.
-2. **pledge(2)** limits the available syscalls to `stdio` (implied) and
-   `inet` (socket, accept, getpeername). `wpath cpath` are added when a
-   log file is configured (reopen with O_CREAT on SIGHUP), `cpath` when
-   a pid file is configured (unlink on exit).
+1. **unveil(2)** reduces the filesystem view to what the daemon still
+   touches: the log file (`wc`) and the pid file plus its directory
+   (`cr`/`wc` - perl's unlink() lstat()s the file first, so removal
+   needs `r` for the stat and `c` for the delete on the file itself;
+   the directory unveil alone is not sufficient). With neither
+   `log_file` nor `pid_file` configured, unveils are locked empty: the
+   daemon has no filesystem access at all.
+2. **pledge(2)** limits the syscalls to `stdio` (implied) and `inet`;
+   `wpath cpath` when a log file is configured (reopen after
+   rotation), and additionally `rpath` when a pid file is configured
+   (perl's unlink lstat, found via ktrace after every shutdown ended
+   in a pledge abort). unveil keeps the readable paths limited to the
+   log file and the pid directory.
 
-Both steps are logged, so a successful restriction is verifiable in
-`/var/log/daemon`:
+Both steps are logged on every start:
 
 ```
 [*] filesystem restricted via unveil(2)
-[*] pledged to: stdio inet
+[*] pledged to: stdio inet wpath cpath rpath
 ```
 
 On non-OpenBSD platforms the daemon logs `pledge/unveil unavailable`
-instead and runs without these restrictions.
+and runs without these restrictions.
 
 ## pf configuration
 
-Merge this into `/etc/pf.conf` (adjust `ext_if` and the port lists to your
-setup) and reload with `pfctl -f /etc/pf.conf`:
+Merge this into `/etc/pf.conf` (adjust `ext_if` and the port lists) and
+reload with `pfctl -f /etc/pf.conf`:
 
 ```pf
 ext_if = "em0"
 
 table <bruteforcers> persist
-# Optional: seed the table from a file so entries survive a reboot
-# (runtime changes live in the kernel only, see below):
+# Optional: seed the table from a file so entries survive a reboot:
 #table <bruteforcers> persist file "/etc/bruteforcers"
 
-# Outbound traffic stays stateful - the replies must be able to return.
-# If the whole ruleset is built from this fragment (as on a test
-# system), a missing stateful pass out silently breaks DNS and every
-# outgoing connection: the replies match the inbound block rule.
+# Outbound traffic stays stateful - the replies must be able to
+# return.  Building a complete ruleset from this fragment without
+# this rule silently breaks DNS and every outgoing connection.
 pass out on $ext_if proto { tcp, udp, icmp } all keep state
 
 # Never tarpit your own admins - this rule must come first.
 table <admins> const { 198.51.100.10 }
 pass in quick on $ext_if from <admins>
 
-# Everyone already on the list is pushed straight into the tarpit.
+# Everyone already on the list goes straight into the tarpit.
 # Must be listed before the ordinary ssh/http rules below.
 pass in quick on $ext_if proto tcp from <bruteforcers> to any port { ssh, http, https } \
     rdr-to 127.0.0.1 port 8024
@@ -303,35 +289,34 @@ pass in on $ext_if proto tcp to any port ssh flags S/SA keep state \
 pass in on $ext_if proto tcp to any port { http, https } flags S/SA keep state \
     (max-src-conn-rate 30/10, overload <bruteforcers> flush global)
 
-# IPv6 (default daemon listens on ::1 as well; separate rules):
-#pass in quick on $ext_if inet6 proto tcp from <bruteforcers> \
-#    to ($ext_if) port { http, https } rdr-to ::1 port 8024
-#pass in on $ext_if inet6 proto tcp to ($ext_if) port { http, https } \
-#    flags S/SA keep state \
-#    (max-src-conn-rate 30/10, overload <bruteforcers> flush)
+# IPv6 (the daemon listens on ::1 as well by default; separate rules):
+pass in quick on $ext_if inet6 proto tcp from <bruteforcers> \
+    to ($ext_if) port { http, https } rdr-to ::1 port 8024
+pass in on $ext_if inet6 proto tcp to ($ext_if) port { http, https } \
+    flags S/SA keep state \
+    (max-src-conn-rate 30/10, overload <bruteforcers> flush)
 ```
 
-Rule order matters: the tarpit `pass in quick ... rdr-to` rule must appear
-before the plain ssh/http pass rules, otherwise new connections from listed
-addresses would match the ordinary rules first. A common
-`set skip on lo { ... }` is not a problem - translation and state creation
-happen on `$ext_if`, before the packet is handed to the loopback interface.
-
-Because the daemon listens on `127.0.0.1` only, it is unreachable from the
+Rule order matters: the tarpit `pass in quick ... rdr-to` rule must
+appear before the plain ssh/http pass rules. `set skip on lo` is not a
+problem - translation and state creation happen on `$ext_if`. Because
+the daemon listens on loopback only, it is unreachable from the
 outside unless pf redirects traffic to it.
 
 ## Log messages
 
-The daemon logs four kinds of lines to `daemon.info`:
+The daemon writes these lines to its log file (or syslog in
+stdout mode):
 
 | Message                                             | Meaning                                   |
 |-----------------------------------------------------|-------------------------------------------|
 | `[+] bot trapped: IP:PORT`                          | new connection accepted and held          |
-| `[-] bot gave up after N s/min/h/d: IP`             | client closed cleanly (FIN) after a readable duration in the tarpit |
-| `[-] bot aborted after N s/min/h/d: IP (ERROR)`     | client sent RST or hit a socket error after a readable duration |
-| `[-] bot vanished before capture`                   | client reset the connection before accept() could read its address; dropped |
+| `[-] bot gave up after N s/min/h/d: IP`             | client closed cleanly (FIN)               |
+| `[-] bot aborted after N s/min/h/d: IP (ERROR)`     | client RST or socket/write error          |
+| `[-] bot vanished before capture`                   | reset before accept() could read the address; dropped |
 | `[*] starting periodic cleanup of stale connections`| cleanup pass started                      |
-| `[*] kicking bot after N s/min/h/d hold time: IP:PORT` | daemon timeout: connection closed after exceeding `max_age` |
+| `[*] kicking bot after N s/min/h/d hold time: IP:PORT` | daemon timeout after exceeding `max_age` |
+| `[*] log file reopened after rotation`              | SIGHUP: logging continues in the new file |
 
 ## Operating the blocklist
 
@@ -341,9 +326,8 @@ pfctl -t bruteforcers -T delete 203.0.113.7   # unblock a single address
 pfctl -t bruteforcers -T flush             # empty the table
 ```
 
-Table entries are kept by the running kernel only. With the `file` variant
-shown above, the table is seeded from the file at load time; to persist
-runtime additions across a reboot, dump the table back:
+Table entries live in the running kernel only; with the `file` variant
+the table is seeded at load time. To persist runtime additions:
 
 ```sh
 pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
@@ -351,109 +335,74 @@ pfctl -t bruteforcers -T show | tail -n +2 > /etc/bruteforcers
 
 ## Behaviour and limits
 
-* The daemon **never sends data** on any trapped connection - that is the
-  whole point. Protocol-agnostic on layer 4.
-* Idle connections are closed after `max_age` seconds at the next cleanup
-  pass, i.e. effectively between `max_age` and
-  `max_age + cleanup_interval` seconds (defaults: 30-60 minutes). Closing
-  sends a normal FIN.
+* Held connections receive one filler byte per `stutter` seconds
+  (default 1, spamd-style) - never a real response. `stutter=0`
+  switches to complete silence. The dribble is capped at 32 KiB per
+  connection so the send buffer can never fill and block the daemon.
+* Idle connections are closed after `max_age` seconds at the next
+  cleanup pass (effectively between `max_age` and
+  `max_age + cleanup_interval`, defaults 30-60 minutes), with a normal
+  FIN.
 * IPv4 and IPv6 are both enabled by default (127.0.0.1 and ::1); each
   family is switched off individually by leaving `listen_ip` or
-  `listen_ip6` empty. IPv6 traffic needs separate `inet6` pf rules with
-  `rdr-to ::1`.
+  `listen_ip6` empty. IPv6 traffic needs separate `inet6` pf rules
+  with `rdr-to ::1`.
 * One process, one single-threaded event loop (`IO::Select`). Per
-  connection cost: one file descriptor plus a small hash entry. The number
-  of simultaneously held connections is bounded by the process fd limit.
-* Incoming data is drained in 64 KiB chunks and discarded, so a flooding
-  client costs the daemon almost nothing while its own window runs full.
+  connection cost: one file descriptor plus a small hash entry.
+* Incoming data is drained in 64 KiB chunks and discarded - a flooding
+  client costs the daemon almost nothing.
 
 ## Packaging notes
 
-The repository contains a ready OpenBSD port skeleton in `port/`
-(`Makefile`, `pkg/PLIST`, `pkg/DESCR`) that installs the files directly
-from this repository: the `@newgroup`/`@newuser` PLIST directives create
-`_tcptarpit` automatically during `pkg_add(1)`, `@rcscript` installs the
-rc.d script into `/etc/rc.d`, and `@sample` installs
-`/etc/tcptarpit.conf` from the packaged sample without touching an
-existing configuration. `make package` builds an installable
-`tcptarpit-1.0.tgz`. See `Architecture.md` for details.
+The port skeleton in `port/` installs from this repository:
+`@newuser`/`@newgroup` create the daemon user with the login class,
+`@rcscript` installs the rc.d script, `@sample` handles the
+configuration, login class and newsyslog entries, and `pkg/README` is
+installed as `/usr/local/share/doc/pkg-readmes/tcptarpit` and shown
+after installation. See `Architecture.md` for details and
+`tests/README.md` for the load test.
 
 ## Verification status
 
-Runtime-verified on a development machine (Linux, perl 5.36): listen and
-accept, tarpit silence, FIN and RST detection, parallel connections,
-cleanup kick including real socket close and fd reclaim, configuration
-parsing (defaults, valid overrides, fail-fast on errors), file logging
-with SIGHUP reopen after rotation, pid file write/remove on TERM, and
-privilege-drop guard cases (no-op as same user, abort when switching to
-another user without root, abort on unknown user). CPU cost of a 1 MB
-flood burst: ~0 s (the previous 1-byte-read variant needed ~11 s CPU per
-MB). See `Architecture.md` for the measurements.
+Runtime-verified on a development machine (Linux, perl 5.36) and on
+**OpenBSD 7.9 and 8.0** (amd64) test systems:
 
-**Verified on OpenBSD 7.9 (amd64) test system:** complete package build
-via `/usr/ports/mystuff` + `make package`, `pkg_add -D unsigned`,
-automatic `_tcptarpit` user/group creation (uid/gid 960, confirmed in
-`/var/log/messages`), file placement incl. `/etc/rc.d/tcptarpit` and
-`/etc/tcptarpit.conf` via `@sample`, the full rcctl lifecycle
-(enable/start/check/restart/stop - all `(ok)`), `daemon_logger` output
-in `/var/log/daemon`, pledge(2) and unveil(2) active (`ps -o pledge`
-shows `stdio,inet`, uid/gid 960) and a live tarpit catch with FIN
-detection (`[+] bot trapped` / `[-] bot gave up`).
+* **Port build and package lifecycle** (7.9 and 8.0): build via
+  `/usr/ports/mystuff`, install, in-place upgrades
+  (`1.0 -> 1.1 -> 1.2.x -> 1.3.0 -> 1.4.x`), uninstall matrix
+  (plain delete keeps a modified configuration and the user;
+  `pkg_delete -c` removes both; the `pkg_scripts` entry survives -
+  disable explicitly). Same-version pkg_add is a silent no-op - use
+  pkg_delete first or `-r`.
+* **Daemon runtime** (7.9 and 8.0): rcctl lifecycle all ok, automatic
+  `_tcctarpit` user/group/login class, pledge(2) and unveil(2) active
+  (`ps -o pledge` shows the promised set, uid/gid 960), clean
+  shutdowns (after the rpath fix), IPv4 and IPv6 listeners by default,
+  spamd-style stutter with readable hold durations in every log line.
+* **Load and resource suite** (tests/tarpit-loadtest.pl, 8.0): 300
+  idle connections (no measurable RSS growth per connection), 100 MiB
+  data flood for +1 s CPU, 1500-cycle FIN/RST churn for +1 s CPU,
+  100 slowloris connections at +0 s, 450 concurrent connections (459
+  fds), full recovery to baseline. Without the login class the daemon
+  caps at ~125 connections but survives and recovers.
+* **Logging** (8.0): complete load test left `/var/log/daemon`
+  byte-for-byte unchanged; everything lands in
+  `/var/log/tcptarpit.log`; SIGHUP reopen after rotation works, and a
+  missing log file at SIGHUP degrades to stdout with a warning
+  instead of losing messages.
+* **pf integration** (7.9 and 8.0, httpd on 80, no listener on 443):
+  40 established connections within 0.02 s trigger
+  `max-src-conn-rate 30/10`, the source lands in `<bruteforcers>`,
+  connections to both 80 and 443 are redirected into the tarpit, the
+  daemon logs the preserved original source IP, and deleting the
+  table entry restores normal service immediately. Operational note:
+  the rate limits count connections with a completed TCP handshake -
+  SYN-only bursts against a closed port do not trigger the overload.
 
-Package update verified as well: `pkg_add -D unsigned <file>` upgrades
-in place (`tcptarpit-1.0->1.1: ok`; the `-u` form expects a package
-name plus PKG_PATH, not a file path), the installed package ships
-`share/doc/tcptarpit/CHANGES`, and an admin-modified
-`/etc/tcptarpit.conf` survives reinstallation (verified with
-`pkg_add -r`).
-
-Uninstall matrix verified: plain `pkg_delete tcptarpit` removes all
-package files, keeps an admin-modified `/etc/tcptarpit.conf` (with a
-reminder to remove it manually) and keeps the `_tcptarpit` user/group
-(with `userdel`/`groupdel` hints). `pkg_delete -c tcptarpit` with an
-unchanged configuration removes the configuration *and* the
-user/group. One leftover in both cases: the `pkg_scripts` entry in
-`/etc/rc.conf.local` stays, so run `rcctl disable tcptarpit` for a
-complete removal.
-
-Note for offline installs: pkg_add consults `/etc/installurl` even for
-local package files and blocks while the mirror is unreachable - during
-the tests this first looked like an isolated-system problem, but the
-real cause was a broken pf ruleset without a stateful `pass out`: the
-VM's own DNS and HTTPS replies were dropped by the inbound block rule
-(found with `pfctl -d`, connections recovered immediately). Fully
-offline installs work with a local package path:
-
-```sh
-PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.1
-```
-
-pf interaction verified end to end with httpd(8) on port 80 and no
-listener on 443: 40 established connections within 0.02 s trigger
-`max-src-conn-rate 30/10`, the source lands in `<bruteforcers>`
-(`pfctl -t bruteforcers -T show`), subsequent connections to **both**
-80 and 443 are redirected into the tarpit (HTTP request times out
-silently; 443 changes from "refused" to "connected, then silence"),
-`/var/log/daemon` shows `[+] bot trapped: <real.ip>` and
-`[-] bot gave up after N s: <real.ip>` with the preserved original
-source address, and `pfctl -t bruteforcers -T delete` restores normal
-service immediately. Note for operations: the rate limits count
-connections with a completed TCP handshake (pf.conf(5)) - bursts of
-SYNs against a closed port create states but do not trigger the
-overload.
-
-**Load and resource test (tests/tarpit-loadtest.pl) on OpenBSD
-8.0/amd64, with the packaged login class active:** 300 concurrent idle
-connections held (307 fds, no measurable RSS growth per connection),
-100 MiB pushed over 50 connections for +1 s daemon CPU, 1500-cycle
-FIN/RST churn for +1 s CPU, 100 slowloris connections at +0 s CPU,
-450 concurrent connections held (457 fds), and full recovery to
-baseline (7 fds) afterwards. Without the login class the daemon
-reaches the default 128 fd soft limit at ~125 connections - the test
-suite documents and covers exactly this.
-
-**Still open:** newsyslog(8) rotation with `log_file`/`pid_file` in
-production, and the in-daemon `setuid` branch (the package path runs
+**Still open:** IPv6 traffic through pf with a global IPv6 address
+(the test VM has none - the inet6 rules are documented but untested
+with real traffic), newsyslog(8) rotation over long production
+timeframes, and the in-daemon `setuid` branch (the package path runs
 unprivileged from the start).
 
 ## Uninstall
@@ -462,16 +411,20 @@ Installed as a package:
 
 ```sh
 rcctl stop tcptarpit
+rcctl disable tcctarpit
 doas pkg_delete tcptarpit          # add -c to also remove _tcptarpit
+# optionally remove the marked newsyslog block and the log:
+# editor /etc/newsyslog.conf; rm /var/log/tcptarpit.log*
 ```
 
 Manual installation:
 
 ```sh
-rcctl stop    tcptarpit
+rcctl stop    tcctarpit
 rcctl disable tcptarpit
 rm /usr/local/bin/tcptarpit.pl /etc/rc.d/tcptarpit \
-   /etc/tcptarpit.conf /usr/local/man/man8/tcptarpit.8
+   /etc/tcptarpit.conf /etc/login.conf.d/tcptarpit \
+   /var/run/tcptarpit/tcptarpit.pid /usr/local/man/man8/tcptarpit.8
 userdel _tcptarpit; groupdel _tcptarpit
 # remove the tarpit/overload rules from /etc/pf.conf, then:
 pfctl -f /etc/pf.conf
