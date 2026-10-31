@@ -12,6 +12,11 @@ tcptarpit - change history
   build; uid/gid 960 must be registered in
   /usr/ports/infrastructure/db/user.list for @newuser/@newgroup
 - port: install this file as share/doc/tcptarpit/CHANGES
+- README: the pf.conf example now includes a stateful
+  `pass out ... keep state` rule - building a complete ruleset from
+  the fragment without it silently breaks the system's own outgoing
+  traffic (replies match the inbound block; found with `pfctl -d`
+  during the OpenBSD 7.9 tests)
 
 1.0 (2026-10-31)
 - initial release: generic layer-4 TCP tarpit behind pf rdr-to,

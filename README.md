@@ -235,6 +235,12 @@ table <bruteforcers> persist
 # (runtime changes live in the kernel only, see below):
 #table <bruteforcers> persist file "/etc/bruteforcers"
 
+# Outbound traffic stays stateful - the replies must be able to return.
+# If the whole ruleset is built from this fragment (as on a test
+# system), a missing stateful pass out silently breaks DNS and every
+# outgoing connection: the replies match the inbound block rule.
+pass out on $ext_if proto { tcp, udp, icmp } all keep state
+
 # Never tarpit your own admins - this rule must come first.
 table <admins> const { 198.51.100.10 }
 pass in quick on $ext_if from <admins>
@@ -355,9 +361,13 @@ user/group. One leftover in both cases: the `pkg_scripts` entry in
 `/etc/rc.conf.local` stays, so run `rcctl disable tcptarpit` for a
 complete removal.
 
-Note for isolated systems: even with a package file argument, pkg_add
-consults `/etc/installurl` and hangs silently when the mirror is
-unreachable. Install fully offline with a local package path instead:
+Note for offline installs: pkg_add consults `/etc/installurl` even for
+local package files and blocks while the mirror is unreachable - during
+the tests this first looked like an isolated-system problem, but the
+real cause was a broken pf ruleset without a stateful `pass out`: the
+VM's own DNS and HTTPS replies were dropped by the inbound block rule
+(found with `pfctl -d`, connections recovered immediately). Fully
+offline installs work with a local package path:
 
 ```sh
 PKG_PATH=/usr/ports/packages/<arch>/all pkg_add -D unsigned tcptarpit-1.1

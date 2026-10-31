@@ -317,11 +317,17 @@ Verified on the OpenBSD 7.9 (amd64) test system (2026-10-31):
   unchanged configuration removes configuration and user/group. The
   pkg_scripts entry in rc.conf.local survives both - disable
   explicitly for a complete removal.
-* Isolated systems: pkg_add consults /etc/installurl even for local
-  package files and hangs silently (state I, wchan piperd) when the
-  mirror is unreachable. `PKG_PATH=<local pkgdir> pkg_add -D unsigned
-  <name>` installs fully offline; no stale locks or child processes
-  are left by the SIGINT-aborted runs.
+* Operational lesson from the test ruleset: replacing the whole pf.conf
+  without a stateful `pass out` broke the test system's own outgoing
+  traffic - DNS and HTTPS replies matched `block return in` because no
+  state existed for them (SSH survived because the inbound ssh pass is
+  stateful). pkg_add then blocked silently on its installurl check,
+  which first looked like an offline system. `pfctl -d` identified the
+  ruleset as the cause within seconds; the test pf.conf and the README
+  example now include `pass out ... keep state`. Fully offline
+  installs work with `PKG_PATH=<local pkgdir> pkg_add -D unsigned
+  <name>`; SIGINT-aborted pkg_add runs leave no stale locks or child
+  processes.
 * pf interplay end to end (httpd on 80, no listener on 443): 40
   established connections in 0.02 s trigger max-src-conn-rate 30/10,
   the source appears in <bruteforcers>, connections to 80 AND 443 are
